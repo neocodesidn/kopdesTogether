@@ -1,0 +1,318 @@
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
+
+local Players = game:GetService("Players")
+local VirtualUser = game:GetService("VirtualUser")
+local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- ==========================================
+-- KONFIGURASI REPOSITORY PLUGIN
+-- ==========================================
+local REPO_PLUGINS = "https://raw.githubusercontent.com/neocodesidn/roblox/main/kopdesTogether/plugins/"
+
+local DaftarPlugin = {
+    { id = "restok",  name = "Auto Restok (Gudang-Safe)", file = "auto_restok.lua" },
+    { id = "payroll", name = "Auto Payroll & Deposit",    file = "auto_payroll.lua" },
+    { id = "quest",   name = "Auto Claim Quest",          file = "auto_quest.lua" },
+    { id = "webhook", name = "Discord Webhook V2",        file = "discord_log.lua" },
+}
+
+-- ==========================================
+-- WINDOW UTAMA RAYFIELD GEN 2
+-- ==========================================
+local Window = Rayfield:CreateWindow({
+    name = "Kopdes Together | v2.0",
+    subtitle = "Cheese Dev • Modular Suite",
+    sidebarLayout = true,
+})
+
+-- ==========================================
+-- SHARED CORE API & EVENT BUS UNTUK PLUGIN
+-- ==========================================
+local EventListeners = {}
+local LoadedPlugins = {}
+
+local function formatRupiah(angka)
+    local formatted = tostring(math.floor(tonumber(angka) or 0))
+    while true do
+        local k
+        formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", "%1.%2")
+        if k == 0 then break end
+    end
+    return formatted
+end
+
+local KopdesAPI = {
+    Version = "2.0",
+    Rayfield = Rayfield,
+    Window = Window,
+    Players = Players,
+    LocalPlayer = LocalPlayer,
+    PlayerGui = PlayerGui,
+    HttpService = HttpService,
+    Plot = workspace:WaitForChild("Plot1"),
+    Remotes = {
+        Kardus = ReplicatedStorage:WaitForChild("KardusRemotes"),
+        Bank = ReplicatedStorage:WaitForChild("BankRemotes"),
+        Quest = ReplicatedStorage:WaitForChild("QuestRemotes"),
+    },
+    FormatRupiah = formatRupiah,
+}
+
+-- Event Bus agar plugin bisa berkomunikasi tanpa saling bergantung
+function KopdesAPI.On(eventName, callback)
+    if not EventListeners[eventName] then
+        EventListeners[eventName] = {}
+    end
+    table.insert(EventListeners[eventName], callback)
+end
+
+function KopdesAPI.Emit(eventName, data)
+    local list = EventListeners[eventName]
+    if not list then return end
+    for _, fn in ipairs(list) do
+        task.spawn(pcall, fn, data)
+    end
+end
+
+-- Safe UI Wrappers (Kompatibel penuh dengan Rayfield Gen 2)
+function KopdesAPI.Notify(title, content, duration)
+    pcall(function()
+        Rayfield:Notify({
+            title = title,
+            content = content,
+            duration = duration or 3,
+        })
+    end)
+end
+
+function KopdesAPI.CreateTab(name, iconId)
+    local ok, tab = pcall(function()
+        if iconId then
+            return Window:CreateTab({ name = name, icon = iconId })
+        end
+        return Window:CreateTab({ name = name })
+    end)
+    if ok and tab then return tab end
+    return Window:CreateTab({ name = name })
+end
+
+function KopdesAPI.Section(tab, title)
+    local ok = pcall(function()
+        tab:CreateSection({ name = title })
+    end)
+    if not ok then
+        pcall(function() tab:CreateSection(title) end)
+    end
+end
+
+function KopdesAPI.Paragraph(tab, title, content)
+    local ok, obj = pcall(function()
+        return tab:CreateParagraph({ title = title, content = content })
+    end)
+    return ok and obj or nil
+end
+
+function KopdesAPI.Button(tab, name, callback)
+    return tab:CreateButton({
+        name = name,
+        callback = callback,
+    })
+end
+
+function KopdesAPI.Toggle(tab, name, defaultVal, callback)
+    return tab:CreateToggle({
+        name = name,
+        currentValue = defaultVal or false,
+        callback = callback,
+    })
+end
+
+function KopdesAPI.Slider(tab, name, minVal, maxVal, inc, suffix, defaultVal, callback)
+    return tab:CreateSlider({
+        name = name,
+        range = { minVal, maxVal },
+        increment = inc or 1,
+        suffix = suffix or "",
+        currentValue = defaultVal or minVal,
+        callback = callback,
+    })
+end
+
+function KopdesAPI.Dropdown(tab, name, options, defaultOpt, callback)
+    return tab:CreateDropdown({
+        name = name,
+        options = options,
+        currentOption = defaultOpt or options[1],
+        multipleOptions = false,
+        callback = function(selected)
+            local val = (typeof(selected) == "table" and selected[1]) or selected
+            if callback then callback(val) end
+        end,
+    })
+end
+
+function KopdesAPI.Input(tab, name, placeholder, callback)
+    return tab:CreateInput({
+        name = name,
+        placeholderText = placeholder or "",
+        removeTextAfterFocusLost = false,
+        callback = callback,
+    })
+end
+
+function KopdesAPI.SetElementText(elem, newText, newContent)
+    if not elem then return end
+    pcall(function()
+        if elem.Set then
+            if newContent then
+                elem:Set({ title = newText, content = newContent })
+            else
+                elem:Set(newText)
+            end
+        elseif elem.Update then
+            if newContent then
+                elem:Update({ title = newText, content = newContent })
+            else
+                elem:Update(newText)
+            end
+        end
+    end)
+end
+
+-- ==========================================
+-- ANTI-AFK GLOBAL
+-- ==========================================
+local antiAfkEnabled = true
+LocalPlayer.Idled:Connect(function()
+    if antiAfkEnabled then
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end
+end)
+
+-- ==========================================
+-- TAB 1: DASHBOARD & PLUGIN MANAGER
+-- ==========================================
+local HomeTab = KopdesAPI.CreateTab("Dashboard", 93364949241311)
+
+KopdesAPI.Section(HomeTab, "Live Status Koperasi")
+local StatusCard = KopdesAPI.Paragraph(
+    HomeTab,
+    "Memuat Data Koperasi...",
+    "Menghubungkan ke server Bank & Plot1..."
+)
+
+KopdesAPI.Section(HomeTab, "Sistem & Keamanan AFK")
+KopdesAPI.Toggle(HomeTab, "Anti-AFK (Cegah Kick 20 Menit)", true, function(val)
+    antiAfkEnabled = val
+end)
+
+KopdesAPI.Button(HomeTab, "Salin Link Discord Cheese Dev", function()
+    if setclipboard then
+        setclipboard("https://cheesedev.biz.id")
+        KopdesAPI.Notify("Tersalin!", "https://cheesedev.biz.id disalin ke clipboard.", 3)
+    end
+end)
+
+-- ==========================================
+-- FUNGSI PEMUAT PLUGIN (ISOLATED SANDBOX)
+-- ==========================================
+local function muatPluginDariUrl(pluginName, url)
+    local okGet, source = pcall(function()
+        return game:HttpGet(url .. "?t=" .. tostring(os.time()))
+    end)
+    if not okGet or not source or source == "" or source:find("404: Not Found") then
+        return false, "File tidak ditemukan (404)"
+    end
+
+    local fn, errCompile = loadstring(source)
+    if not fn then
+        return false, "Syntax Error: " .. tostring(errCompile)
+    end
+
+    local okRun, errRun = pcall(fn, KopdesAPI)
+    if not okRun then
+        return false, "Runtime Error: " .. tostring(errRun)
+    end
+
+    return true, "Aktif"
+end
+
+-- Muat semua plugin resmi secara otomatis
+local ringkasanPlugin = {}
+for _, info in ipairs(DaftarPlugin) do
+    local ok, status = muatPluginDariUrl(info.name, REPO_PLUGINS .. info.file)
+    LoadedPlugins[info.id] = { name = info.name, ok = ok, status = status }
+    table.insert(ringkasanPlugin, (ok and "[ON] " or "[ERR] ") .. info.name .. " (" .. status .. ")")
+end
+
+KopdesAPI.Section(HomeTab, "Plugin Manager")
+KopdesAPI.Paragraph(
+    HomeTab,
+    "Modul Terpasang (" .. #DaftarPlugin .. " Plugin)",
+    table.concat(ringkasanPlugin, "\n")
+)
+
+local customPluginUrl = ""
+KopdesAPI.Input(HomeTab, "Load Custom Plugin via URL (.lua)", "https://raw.githubusercontent.com/...", function(txt)
+    customPluginUrl = txt
+end)
+
+KopdesAPI.Button(HomeTab, "Jalankan Custom Plugin", function()
+    if customPluginUrl == "" or not customPluginUrl:find("^https?://") then
+        KopdesAPI.Notify("URL Tidak Valid", "Masukkan link raw GitHub .lua yang valid.", 3)
+        return
+    end
+    local ok, status = muatPluginDariUrl("Custom Plugin", customPluginUrl)
+    KopdesAPI.Notify(ok and "Plugin Dimuat!" or "Gagal Memuat Plugin", status, 4)
+end)
+
+-- ==========================================
+-- LOOP LIVE DASHBOARD (UPDATE TIAP 4 DETIK)
+-- ==========================================
+local GetStateRemote = KopdesAPI.Remotes.Bank:WaitForChild("GetState")
+local clickObject = KopdesAPI.Plot:WaitForChild("ClickObject")
+
+task.spawn(function()
+    while true do
+        local saldoTokoText, saldoUserText = "-", "-"
+        local okState, state = pcall(function()
+            return GetStateRemote:InvokeServer()
+        end)
+        if okState and typeof(state) == "table" then
+            if typeof(state.shopBalance) == "number" then
+                saldoTokoText = "Rp " .. formatRupiah(state.shopBalance)
+            end
+            if typeof(state.userBalance) == "number" then
+                saldoUserText = "Rp " .. formatRupiah(state.userBalance)
+            end
+        end
+
+        local hariText = "Memantau..."
+        for _, obj in ipairs(PlayerGui:GetDescendants()) do
+            if obj:IsA("TextLabel") and obj.Text:match("^Hari%s*%d+") then
+                hariText = obj.Text
+                break
+            end
+        end
+
+        local totalKardus = 0
+        for _, v in ipairs(clickObject:GetChildren()) do
+            if v.Name == "Kardus" then
+                totalKardus = totalKardus + 1
+            end
+        end
+
+        KopdesAPI.SetElementText(
+            StatusCard,
+            hariText .. "  •  Kardus Area: " .. totalKardus,
+            "Kas Toko: " .. saldoTokoText .. "\nSaldo Pribadi: " .. saldoUserText
+        )
+
+        task.wait(4)
+    end
+end)
