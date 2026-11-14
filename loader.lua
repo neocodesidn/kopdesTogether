@@ -9,9 +9,9 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ==========================================
--- KONFIGURASI REPOSITORY PLUGIN
+-- KONFIGURASI REPOSITORY PLUGIN (REPO BARU)
 -- ==========================================
-local REPO_PLUGINS = "https://raw.githubusercontent.com/neocodesidn/roblox/main/kopdesTogether/plugins/"
+local REPO_PLUGINS = "https://raw.githubusercontent.com/neocodesidn/kopdesTogether/main/plugins/"
 
 local DaftarPlugin = {
     { id = "restok",  name = "Auto Restok (Gudang-Safe)", file = "auto_restok.lua" },
@@ -62,7 +62,6 @@ local KopdesAPI = {
     FormatRupiah = formatRupiah,
 }
 
--- Event Bus agar plugin bisa berkomunikasi tanpa saling bergantung
 function KopdesAPI.On(eventName, callback)
     if not EventListeners[eventName] then
         EventListeners[eventName] = {}
@@ -78,7 +77,6 @@ function KopdesAPI.Emit(eventName, data)
     end
 end
 
--- Safe UI Wrappers (Kompatibel penuh dengan Rayfield Gen 2)
 function KopdesAPI.Notify(title, content, duration)
     pcall(function()
         Rayfield:Notify({
@@ -219,7 +217,7 @@ KopdesAPI.Button(HomeTab, "Salin Link Discord Cheese Dev", function()
 end)
 
 -- ==========================================
--- FUNGSI PEMUAT PLUGIN (ISOLATED SANDBOX)
+-- FUNGSI PEMUAT PLUGIN
 -- ==========================================
 local function muatPluginDariUrl(pluginName, url)
     local okGet, source = pcall(function()
@@ -242,7 +240,6 @@ local function muatPluginDariUrl(pluginName, url)
     return true, "Aktif"
 end
 
--- Muat semua plugin resmi secara otomatis
 local ringkasanPlugin = {}
 for _, info in ipairs(DaftarPlugin) do
     local ok, status = muatPluginDariUrl(info.name, REPO_PLUGINS .. info.file)
