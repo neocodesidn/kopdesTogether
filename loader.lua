@@ -9,22 +9,23 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ==========================================
--- KONFIGURASI REPOSITORY PLUGIN (REPO BARU)
+-- KONFIGURASI REPOSITORY PLUGIN
 -- ==========================================
 local REPO_PLUGINS = "https://raw.githubusercontent.com/neocodesidn/kopdesTogether/main/plugins/"
 
 local DaftarPlugin = {
-    { id = "restok",  name = "Auto Restok (Gudang-Safe)", file = "auto_restok.lua" },
-    { id = "payroll", name = "Auto Payroll & Deposit",    file = "auto_payroll.lua" },
-    { id = "quest",   name = "Auto Claim Quest",          file = "auto_quest.lua" },
-    { id = "webhook", name = "Discord Webhook V2",        file = "discord_log.lua" },
+    { id = "restok",        name = "Auto Restok (Gudang-Safe)",   file = "auto_restok.lua" },
+    { id = "payroll",       name = "Auto Payroll & Deposit",      file = "auto_payroll.lua" },
+    { id = "smart_payroll", name = "Smart Payroll (Profit Share)", file = "smart_payroll.lua" },
+    { id = "quest",         name = "Auto Claim Quest",            file = "auto_quest.lua" },
+    { id = "webhook",       name = "Discord Webhook V2",          file = "discord_log.lua" },
 }
 
 -- ==========================================
 -- WINDOW UTAMA RAYFIELD GEN 2
 -- ==========================================
 local Window = Rayfield:CreateWindow({
-    name = "Kopdes Together | v2.0",
+    name = "Kopdes Together | v2.1",
     subtitle = "Cheese Dev • Modular Suite",
     sidebarLayout = true,
 })
@@ -46,7 +47,7 @@ local function formatRupiah(angka)
 end
 
 local KopdesAPI = {
-    Version = "2.0",
+    Version = "2.1",
     Rayfield = Rayfield,
     Window = Window,
     Players = Players,
