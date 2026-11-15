@@ -225,7 +225,7 @@ DepositButton = API.Button(BankTab, "Setor 10 Juta ke Toko", function()
     end
 end)
 
-API.Section(BankTab, "Anggaran & Penerima Gaji")
+API.Section(BankTab, "Anggaran & Penerima Gaji (Standar)")
 API.Slider(BankTab, "Anggaran Gaji Per Hari", 1, 50, 1, " Juta / Hari", 10, function(val)
     gajiPerHariJuta = val
 end)
@@ -264,6 +264,9 @@ end)
 local AutoGajianToggle
 AutoGajianToggle = API.Toggle(BankTab, "Auto Gajian Saat Ganti Hari (21:00)", false, function(val)
     autoGajianGantiHari = val
+    if val then
+        API.Emit("DisableSmartPayroll")
+    end
     API.Notify(
         val and "Auto Gajian Aktif" or "Auto Gajian Mati",
         val and ("Gaji Rp " .. gajiPerHariJuta .. " Juta cair 1x tiap ganti hari.") or "Auto gajian dihentikan.",
@@ -273,6 +276,13 @@ end)
 
 API.Button(BankTab, "Cairkan Gaji Sekarang (Manual 1x Klik)", function()
     task.spawn(cairkanGajiHarian, "Manual", true)
+end)
+
+API.On("DisableStandardPayroll", function()
+    if autoGajianGantiHari then
+        autoGajianGantiHari = false
+        API.SetElementText(AutoGajianToggle, false)
+    end
 end)
 
 -- Detektor Ganti Hari Real-Time
