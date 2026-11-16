@@ -15,6 +15,7 @@ local REPO_PLUGINS = "https://raw.githubusercontent.com/neocodesidn/kopdesTogeth
 
 local DaftarPlugin = {
     { id = "restok",        name = "Auto Restok (Gudang-Safe)",    file = "auto_restok.lua" },
+    { id = "shop_ops",      name = "Auto Kasir & Anti-Pencuri",    file = "shop_ops.lua" },
     { id = "payroll",       name = "Auto Payroll & Deposit",       file = "auto_payroll.lua" },
     { id = "smart_payroll", name = "Smart Payroll (Profit Share)", file = "smart_payroll.lua" },
     { id = "sewa_pekerja",  name = "Sewa Pekerja (NPC Staff)",     file = "sewa_pekerja.lua" },
