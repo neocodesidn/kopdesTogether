@@ -6,7 +6,7 @@ local PlaceOilDoneRemote = API.Remotes.Kardus:FindFirstChild("PlaceOilDone")
 local clickObject = API.Plot:WaitForChild("ClickObject")
 
 -- ==========================================
--- KONFIGURASI AUTO RESTOK RAK (UNIVERSAL)
+-- KONFIGURASI AUTO INPUT RAK (UNIVERSAL)
 -- ==========================================
 local autoPlaceRakEnabled = false
 local jedaAntarRak = 0.25
@@ -353,32 +353,32 @@ local function jalankanSiklusIsiRak(abaikanToggle)
 end
 
 -- ==========================================
--- UI TAB: AUTO RESTOK
+-- UI TAB: INPUT
 -- ==========================================
-local RestokTab = API.CreateTab("Auto Restok")
+local InputTab = API.CreateTab("Input")
 
-API.Section(RestokTab, "Status Rak & Kardus Area Toko")
-local StatusRestokCard = API.Paragraph(
-    RestokTab,
+API.Section(InputTab, "Status Rak & Kardus Area Toko")
+local StatusInputCard = API.Paragraph(
+    InputTab,
     "Memindai Rak...",
     "Mengecek slot rak kosong dan ketersediaan kardus..."
 )
 
-API.Section(RestokTab, "Kontrol Auto Place (Semua Jenis Kardus)")
-API.Slider(RestokTab, "Jeda Antar Slot Rak (Detik)", 0.15, 1.50, 0.05, " dtk", 0.25, function(val)
+API.Section(InputTab, "Kontrol Auto Place (Semua Jenis Kardus)")
+API.Slider(InputTab, "Jeda Antar Slot Rak (Detik)", 0.15, 1.50, 0.05, " dtk", 0.25, function(val)
     jedaAntarRak = tonumber(val) or 0.25
 end)
 
-API.Toggle(RestokTab, "Auto Isi Rak Kosong (Otomatis)", false, function(val)
+API.Toggle(InputTab, "Auto Isi Rak Kosong (Otomatis)", false, function(val)
     autoPlaceRakEnabled = val
     API.Notify(
-        val and "Auto Restok Aktif" or "Auto Restok Mati",
-        val and "Otomatis menaruh semua jenis kardus ke slot rak yang kosong." or "Auto restok dihentikan.",
+        val and "Auto Input Aktif" or "Auto Input Mati",
+        val and "Otomatis menaruh semua jenis kardus ke slot rak yang kosong." or "Auto input dihentikan.",
         3
     )
 end)
 
-API.Button(RestokTab, "Isi Semua Rak Kosong Sekarang (1x)", function()
+API.Button(InputTab, "Isi Semua Rak Kosong Sekarang (1x)", function()
     task.spawn(function()
         local rakKosong = cariSemuaRakKosong()
         if #rakKosong == 0 then
@@ -399,7 +399,7 @@ task.spawn(function()
         local kardusAda = ambilSemuaKardusTersedia()
 
         API.SetElementText(
-            StatusRestokCard,
+            StatusInputCard,
             "Slot Rak Kosong: " .. tostring(#rakKosong) .. "  |  Kardus Tersedia: " .. tostring(#kardusAda),
             autoPlaceRakEnabled
                 and (#rakKosong > 0 and "Status: Mengisi rak kosong..." or "Status: Stanby (Semua rak terisi)")
