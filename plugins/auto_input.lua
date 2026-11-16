@@ -1,9 +1,37 @@
 local API = ...
 
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local PickupKardusRemote = API.Remotes.Kardus:FindFirstChild("PickupKardus")
-local PlaceOilDoneRemote = API.Remotes.Kardus:FindFirstChild("PlaceOilDone")
-local clickObject = API.Plot:WaitForChild("ClickObject")
+
+local KardusRemotes = API.Remotes.Kardus or ReplicatedStorage:WaitForChild("KardusRemotes", 10)
+local PickupKardusRemote = KardusRemotes and KardusRemotes:WaitForChild("PickupKardus", 5)
+local PlaceOilDoneRemote = KardusRemotes and KardusRemotes:WaitForChild("PlaceOilDone", 5)
+
+-- ==========================================
+-- DETEKSI OTOMATIS PLOT MILIK SENDIRI
+-- ==========================================
+local function dapatkanPlotToko()
+    local lp = API.LocalPlayer
+    for _, obj in ipairs(Workspace:GetChildren()) do
+        if obj.Name:match("^Plot%d+$") and obj:FindFirstChild("ClickObject") then
+            local ownerAttr = obj:GetAttribute("Owner") or obj:GetAttribute("UserId")
+            if ownerAttr == lp.Name or ownerAttr == lp.UserId then
+                return obj
+            end
+            for _, val in ipairs(obj:GetDescendants()) do
+                if (val:IsA("StringValue") and val.Value == lp.Name)
+                    or (val:IsA("IntValue") and val.Value == lp.UserId)
+                    or (val:IsA("ObjectValue") and val.Value == lp) then
+                    return obj
+                end
+            end
+        end
+    end
+    return API.Plot or Workspace:WaitForChild("Plot1")
+end
+
+local PlotToko = dapatkanPlotToko()
+local clickObject = PlotToko:WaitForChild("ClickObject")
 
 -- ==========================================
 -- KONFIGURASI AUTO INPUT RAK (UNIVERSAL)
@@ -222,7 +250,7 @@ local function buatBatchPenempatanRak(rakPart, itemName, jumlahItem)
 end
 
 -- ==========================================
--- EKSEKUSI PICKUP KARDUS -> PLACE KE RAK
+-- EKSEKUSI PICKUP KARDUS (JARAK JAUH + AUTO-DEKAT)
 -- ==========================================
 local function bacaProdukDiTangan(upperTorso)
     local picked = upperTorso and upperTorso:FindFirstChild("KardusPicked")
@@ -242,19 +270,7 @@ local function bacaProdukDiTangan(upperTorso)
     return picked, nil
 end
 
-local function ambilKardusKeTangan(detailKardus)
-    local char = API.LocalPlayer.Character
-    local upperTorso = char and char:FindFirstChild("UpperTorso")
-    if not upperTorso then return nil end
-
-    local existing, namaDiTangan = bacaProdukDiTangan(upperTorso)
-    if existing then
-        return existing, (namaDiTangan or detailKardus.nama)
-    end
-
-    local kardusObj = detailKardus.obj
-    if not kardusObj or not kardusObj.Parent then return nil end
-
+local function picuInteraksiKardus(kardusObj)
     local cd = kardusObj:FindFirstChildWhichIsA("ClickDetector", true)
     if cd and fireclickdetector then
         pcall(fireclickdetector, cd)
@@ -264,8 +280,46 @@ local function ambilKardusKeTangan(detailKardus)
     if pp and fireproximityprompt then
         pcall(fireproximityprompt, pp)
     end
+end
 
-    local picked = upperTorso:WaitForChild("KardusPicked", 1.2)
+local function ambilKardusKeTangan(detailKardus)
+    local char = API.LocalPlayer.Character
+    local upperTorso = char and char:FindFirstChild("UpperTorso")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not upperTorso then return nil, nil end
+
+    local existing, namaDiTangan = bacaProdukDiTangan(upperTorso)
+    if existing then
+        return existing, (namaDiTangan or detailKardus.nama)
+    end
+
+    local kardusObj = detailKardus.obj
+    if not kardusObj or not kardusObj.Parent then return nil, nil end
+
+    -- Percobaan 1: Picu dari posisi berdiri saat ini
+    picuInteraksiKardus(kardusObj)
+    local picked = upperTorso:WaitForChild("KardusPicked", 0.35)
+
+    -- Percobaan 2: Jika ditolak karena jarak terlalu jauh, dekati kardus sekejap lalu kembali
+    if not picked and hrp then
+        local kardusPos
+        if kardusObj:IsA("BasePart") then
+            kardusPos = kardusObj.Position
+        elseif kardusObj:IsA("Model") then
+            local ok, cf = pcall(function() return kardusObj:GetPivot() end)
+            if ok and cf then kardusPos = cf.Position end
+        end
+
+        if kardusPos then
+            local posisiAwal = hrp.CFrame
+            hrp.CFrame = CFrame.new(kardusPos + Vector3.new(0, 2.5, 0))
+            task.wait(0.08)
+            picuInteraksiKardus(kardusObj)
+            picked = upperTorso:WaitForChild("KardusPicked", 0.9)
+            hrp.CFrame = posisiAwal
+        end
+    end
+
     if picked and PickupKardusRemote then
         pcall(function()
             PickupKardusRemote:FireServer(picked, detailKardus.nama)
@@ -308,11 +362,20 @@ local function pilihPasanganRakDanKardus(daftarRak, daftarKardus, itemDiTangan)
 end
 
 local function jalankanSiklusIsiRak(abaikanToggle)
-    if sedangMengisiRak or not PlaceOilDoneRemote then return 0 end
+    if sedangMengisiRak then return 0 end
+
+    if not PlaceOilDoneRemote then
+        PlaceOilDoneRemote = KardusRemotes and KardusRemotes:FindFirstChild("PlaceOilDone")
+        if not PlaceOilDoneRemote then
+            API.Notify("Remote Tidak Ditemukan", "PlaceOilDone tidak ada di KardusRemotes.", 4)
+            return 0
+        end
+    end
+
     sedangMengisiRak = true
     local terisiCount = 0
 
-    pcall(function()
+    local ok, err = xpcall(function()
         while abaikanToggle or autoPlaceRakEnabled do
             local daftarRakKosong = cariSemuaRakKosong()
             if #daftarRakKosong == 0 then break end
@@ -334,6 +397,10 @@ local function jalankanSiklusIsiRak(abaikanToggle)
             local itemAktif = targetKardus.nama
             if not sedangPegang then
                 sedangPegang, itemAktif = ambilKardusKeTangan(targetKardus)
+                if not sedangPegang then
+                    API.Notify("Gagal Ambil Kardus", "KardusPicked tidak muncul saat mengambil " .. tostring(targetKardus.nama), 4)
+                    break
+                end
                 task.wait(0.15)
             end
 
@@ -346,7 +413,11 @@ local function jalankanSiklusIsiRak(abaikanToggle)
                 break
             end
         end
-    end)
+    end, debug.traceback)
+
+    if not ok then
+        API.Notify("Error Auto Input", tostring(err):sub(1, 140), 5)
+    end
 
     sedangMengisiRak = false
     return terisiCount
@@ -357,7 +428,7 @@ end
 -- ==========================================
 local InputTab = API.CreateTab("Input")
 
-API.Section(InputTab, "Status Rak & Kardus Area Toko")
+API.Section(InputTab, "Status Rak & Kardus (" .. PlotToko.Name .. ")")
 local StatusInputCard = API.Paragraph(
     InputTab,
     "Memindai Rak...",
@@ -382,7 +453,7 @@ API.Button(InputTab, "Isi Semua Rak Kosong Sekarang (1x)", function()
     task.spawn(function()
         local rakKosong = cariSemuaRakKosong()
         if #rakKosong == 0 then
-            API.Notify("Semua Rak Penuh", "Tidak ada slot rak kosong di Plot1.", 3)
+            API.Notify("Semua Rak Penuh", "Tidak ada slot rak kosong di " .. PlotToko.Name .. ".", 3)
             return
         end
         local hasil = jalankanSiklusIsiRak(true)
