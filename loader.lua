@@ -14,11 +14,12 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local REPO_PLUGINS = "https://raw.githubusercontent.com/neocodesidn/kopdesTogether/main/plugins/"
 
 local DaftarPlugin = {
-    { id = "restok",        name = "Auto Restok (Gudang-Safe)",   file = "auto_restok.lua" },
-    { id = "payroll",       name = "Auto Payroll & Deposit",      file = "auto_payroll.lua" },
+    { id = "restok",        name = "Auto Restok (Gudang-Safe)",    file = "auto_restok.lua" },
+    { id = "payroll",       name = "Auto Payroll & Deposit",       file = "auto_payroll.lua" },
     { id = "smart_payroll", name = "Smart Payroll (Profit Share)", file = "smart_payroll.lua" },
-    { id = "quest",         name = "Auto Claim Quest",            file = "auto_quest.lua" },
-    { id = "webhook",       name = "Discord Webhook V2",          file = "discord_log.lua" },
+    { id = "sewa_pekerja",  name = "Sewa Pekerja (NPC Staff)",     file = "sewa_pekerja.lua" },
+    { id = "quest",         name = "Auto Claim Quest",             file = "auto_quest.lua" },
+    { id = "webhook",       name = "Discord Webhook V2",           file = "discord_log.lua" },
 }
 
 -- ==========================================
@@ -26,7 +27,7 @@ local DaftarPlugin = {
 -- ==========================================
 local Window = Rayfield:CreateWindow({
     name = "Kopdes Together | v2.1",
-    subtitle = "Cheese Dev • Modular Suite",
+    subtitle = "Cheese Dev - Modular Suite",
     sidebarLayout = true,
 })
 
