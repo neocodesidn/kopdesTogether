@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local KardusRemotes = API.Remotes.Kardus or ReplicatedStorage:WaitForChild("KardusRemotes", 10)
 local PickupKardusRemote = KardusRemotes and KardusRemotes:WaitForChild("PickupKardus", 5)
+local PlaceOilRemote = KardusRemotes and KardusRemotes:WaitForChild("PlaceOil", 5)
 local PlaceOilDoneRemote = KardusRemotes and KardusRemotes:WaitForChild("PlaceOilDone", 5)
 
 -- ==========================================
@@ -37,15 +38,28 @@ local clickObject = PlotToko:WaitForChild("ClickObject")
 -- KONFIGURASI AUTO INPUT RAK (UNIVERSAL)
 -- ==========================================
 local autoPlaceRakEnabled = false
-local jedaAntarRak = 0.25
+local jedaAntarRak = 0.30
 local sedangMengisiRak = false
 
+-- Daftar kata kunci furnitur agar tidak ikut dimasukkan ke rak display
+local kataKunciFurnitur = { "rak", "kasir", "meja", "kulkas", "freezer", "lampu", "pintu", "dinding" }
+
+local function apakahFurnitur(nama)
+    local lower = tostring(nama):lower()
+    for _, kata in ipairs(kataKunciFurnitur) do
+        if lower:find(kata, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
 -- ==========================================
--- DETEKSI SEMUA KARDUS DI AREA TOKO
+-- DETEKSI SEMUA KARDUS PRODUK DI AREA TOKO
 -- ==========================================
 local function bacaDetailKardus(kardus)
     local namaDitemukan = nil
-    local jumlahIsi = 6
+    local jumlahIsi = 12
 
     for _, attrName in ipairs({ "ItemName", "Product", "Nama", "Item", "Produk", "Barang" }) do
         local val = kardus:GetAttribute(attrName)
@@ -76,14 +90,14 @@ local function bacaDetailKardus(kardus)
         end
 
         if desc:IsA("IntValue") or desc:IsA("NumberValue") then
-            if desc.Value > 0 and desc.Value <= 20 then
+            if desc.Value > 0 and desc.Value <= 24 then
                 jumlahIsi = desc.Value
             end
         elseif desc:IsA("TextLabel") then
             local angkaSisa = desc.Text:match("^[xX]?(%d+)")
             if angkaSisa then
                 local n = tonumber(angkaSisa)
-                if n and n > 0 and n <= 20 then
+                if n and n > 0 and n <= 24 then
                     jumlahIsi = n
                 end
             end
@@ -93,7 +107,7 @@ local function bacaDetailKardus(kardus)
     return {
         obj = kardus,
         nama = namaDitemukan,
-        jumlah = math.clamp(jumlahIsi, 1, 8)
+        jumlah = math.clamp(jumlahIsi, 1, 12)
     }
 end
 
@@ -102,7 +116,7 @@ local function ambilSemuaKardusTersedia()
     for _, v in ipairs(clickObject:GetChildren()) do
         if v.Name == "Kardus" then
             local detail = bacaDetailKardus(v)
-            if detail.nama and detail.nama ~= "" then
+            if detail.nama and detail.nama ~= "" and not apakahFurnitur(detail.nama) then
                 table.insert(daftar, detail)
             end
         end
@@ -174,7 +188,7 @@ local function cariSemuaRakKosong()
 end
 
 -- ==========================================
--- KALKULASI GRID CFRAME & SCALE DINAMIS
+-- KALKULASI GRID CFRAME & SCALE (4x3 / 4x2)
 -- ==========================================
 local modelSizeCache = {}
 local function cariUkuranModelProduk(itemName)
@@ -201,20 +215,22 @@ local function cariUkuranModelProduk(itemName)
 end
 
 local function buatBatchPenempatanRak(rakPart, itemName, jumlahItem)
-    jumlahItem = math.clamp(jumlahItem or 6, 1, 8)
-
-    local cols = 4
-    local rows = 2
-
     local rakW = rakPart.Size.X
     local rakH = rakPart.Size.Y
     local rakD = rakPart.Size.Z
+
+    -- RakBelanja punya kedalaman lebih besar (4 kolom x 3 baris = 12 item)
+    -- RakKecil punya kedalaman lebih sempit (4 kolom x 2 baris = 6-8 item)
+    local cols = 4
+    local rows = (rakD >= 1.5) and 3 or 2
+    local kapasitasMaks = cols * rows
+    local totalPlace = math.clamp(jumlahItem or kapasitasMaks, 1, kapasitasMaks)
 
     local slotW = (rakW * 0.90) / cols
     local slotD = (rakD * 0.85) / rows
 
     local modelSize = cariUkuranModelProduk(itemName)
-    local scale = 0.48711754
+    local scale = (rakD >= 1.5) and 0.65325327 or 0.48711754
     local itemHeight = 0.72
 
     if modelSize then
@@ -229,15 +245,15 @@ local function buatBatchPenempatanRak(rakPart, itemName, jumlahItem)
         or ((rakH / 2) + (itemHeight / 2))
 
     local startX = -((cols - 1) * slotW) / 2
-    local startZ = ((rows - 1) * slotD) / 2
+    local startZ = -((rows - 1) * slotD) / 2
 
     local daftarPenempatan = {}
-    for i = 0, jumlahItem - 1 do
+    for i = 0, totalPlace - 1 do
         local col = i % cols
         local row = math.floor(i / cols)
 
         local offX = startX + (col * slotW)
-        local offZ = startZ - (row * slotD)
+        local offZ = startZ + (row * slotD)
         local worldCF = rakPart.CFrame * CFrame.new(offX, offsetY, offZ)
 
         table.insert(daftarPenempatan, {
@@ -250,7 +266,7 @@ local function buatBatchPenempatanRak(rakPart, itemName, jumlahItem)
 end
 
 -- ==========================================
--- EKSEKUSI PICKUP KARDUS (JARAK JAUH + AUTO-DEKAT)
+-- EKSEKUSI 3 TAHAP: PICKUP -> PLACEOIL -> PLACEOILDONE
 -- ==========================================
 local function bacaProdukDiTangan(upperTorso)
     local picked = upperTorso and upperTorso:FindFirstChild("KardusPicked")
@@ -270,70 +286,37 @@ local function bacaProdukDiTangan(upperTorso)
     return picked, nil
 end
 
-local function picuInteraksiKardus(kardusObj)
-    local cd = kardusObj:FindFirstChildWhichIsA("ClickDetector", true)
-    if cd and fireclickdetector then
-        pcall(fireclickdetector, cd)
-    end
-
-    local pp = kardusObj:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if pp and fireproximityprompt then
-        pcall(fireproximityprompt, pp)
-    end
-end
-
-local function ambilKardusKeTangan(detailKardus)
+local function pastikanKardusPickedLokal(kardusObj, itemName)
     local char = API.LocalPlayer.Character
     local upperTorso = char and char:FindFirstChild("UpperTorso")
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not upperTorso then return nil, nil end
+    if not upperTorso then return nil end
 
-    local existing, namaDiTangan = bacaProdukDiTangan(upperTorso)
+    local existing = upperTorso:FindFirstChild("KardusPicked")
     if existing then
-        return existing, (namaDiTangan or detailKardus.nama)
+        return existing
     end
 
-    local kardusObj = detailKardus.obj
-    if not kardusObj or not kardusObj.Parent then return nil, nil end
-
-    -- Percobaan 1: Picu dari posisi berdiri saat ini
-    picuInteraksiKardus(kardusObj)
-    local picked = upperTorso:WaitForChild("KardusPicked", 0.35)
-
-    -- Percobaan 2: Jika ditolak karena jarak terlalu jauh, dekati kardus sekejap lalu kembali
-    if not picked and hrp then
-        local kardusPos
-        if kardusObj:IsA("BasePart") then
-            kardusPos = kardusObj.Position
-        elseif kardusObj:IsA("Model") then
-            local ok, cf = pcall(function() return kardusObj:GetPivot() end)
-            if ok and cf then kardusPos = cf.Position end
-        end
-
-        if kardusPos then
-            local posisiAwal = hrp.CFrame
-            hrp.CFrame = CFrame.new(kardusPos + Vector3.new(0, 2.5, 0))
-            task.wait(0.08)
-            picuInteraksiKardus(kardusObj)
-            picked = upperTorso:WaitForChild("KardusPicked", 0.9)
-            hrp.CFrame = posisiAwal
-        end
+    -- Jika objek kardus masih ada di ClickObject, gunakan langsung atau pindahkan ke UpperTorso
+    if kardusObj and kardusObj.Parent then
+        kardusObj.Name = "KardusPicked"
+        kardusObj:SetAttribute("ItemName", itemName)
+        kardusObj.Parent = upperTorso
+        return kardusObj
     end
 
-    if picked and PickupKardusRemote then
-        pcall(function()
-            PickupKardusRemote:FireServer(picked, detailKardus.nama)
-        end)
-    end
-
-    return upperTorso:FindFirstChild("KardusPicked"), detailKardus.nama
+    -- Fallback: buat instance KardusPicked lokal jika kardus sudah di-unparent
+    local dummy = Instance.new("Model")
+    dummy.Name = "KardusPicked"
+    dummy:SetAttribute("ItemName", itemName)
+    dummy.Parent = upperTorso
+    return dummy
 end
 
 local function pilihPasanganRakDanKardus(daftarRak, daftarKardus, itemDiTangan)
     if itemDiTangan then
         for _, rak in ipairs(daftarRak) do
             if not rak.lockedItem or rak.lockedItem:lower() == itemDiTangan:lower() then
-                return rak, { nama = itemDiTangan, jumlah = 6 }
+                return rak, { nama = itemDiTangan, jumlah = 12 }
             end
         end
     end
@@ -364,12 +347,9 @@ end
 local function jalankanSiklusIsiRak(abaikanToggle)
     if sedangMengisiRak then return 0 end
 
-    if not PlaceOilDoneRemote then
-        PlaceOilDoneRemote = KardusRemotes and KardusRemotes:FindFirstChild("PlaceOilDone")
-        if not PlaceOilDoneRemote then
-            API.Notify("Remote Tidak Ditemukan", "PlaceOilDone tidak ada di KardusRemotes.", 4)
-            return 0
-        end
+    if not PickupKardusRemote or not PlaceOilRemote or not PlaceOilDoneRemote then
+        API.Notify("Remote Tidak Lengkap", "Pastikan PickupKardus, PlaceOil, dan PlaceOilDone tersedia.", 4)
+        return 0
     end
 
     sedangMengisiRak = true
@@ -395,18 +375,28 @@ local function jalankanSiklusIsiRak(abaikanToggle)
             if not targetRak or not targetKardus then break end
 
             local itemAktif = targetKardus.nama
-            if not sedangPegang then
-                sedangPegang, itemAktif = ambilKardusKeTangan(targetKardus)
-                if not sedangPegang then
-                    API.Notify("Gagal Ambil Kardus", "KardusPicked tidak muncul saat mengambil " .. tostring(targetKardus.nama), 4)
-                    break
-                end
-                task.wait(0.15)
+
+            -- TAHAP 1: PickupKardus
+            local objekPicked = sedangPegang or pastikanKardusPickedLokal(targetKardus.obj, itemAktif)
+            if objekPicked then
+                PickupKardusRemote:FireServer(objekPicked, itemAktif)
+                task.wait(0.10)
             end
 
-            if targetRak.part and targetRak.part.Parent and itemAktif then
-                local batchData = buatBatchPenempatanRak(targetRak.part, itemAktif, targetKardus.jumlah or 6)
+            -- TAHAP 2: PlaceOil (Inisialisasi slot rak di server)
+            if targetRak.part and targetRak.part.Parent then
+                PlaceOilRemote:FireServer(targetRak.part)
+                task.wait(0.08)
+
+                -- TAHAP 3: PlaceOilDone (Kirim susunan CFrame & scale)
+                local batchData = buatBatchPenempatanRak(targetRak.part, itemAktif, targetKardus.jumlah or 12)
                 PlaceOilDoneRemote:FireServer(targetRak.part, batchData, itemAktif)
+
+                -- Bersihkan KardusPicked lokal agar siap mengambil kardus berikutnya
+                if objekPicked and objekPicked.Parent == upperTorso then
+                    objekPicked:Destroy()
+                end
+
                 terisiCount = terisiCount + 1
                 task.wait(jedaAntarRak)
             else
@@ -436,8 +426,8 @@ local StatusInputCard = API.Paragraph(
 )
 
 API.Section(InputTab, "Kontrol Auto Place (Semua Jenis Kardus)")
-API.Slider(InputTab, "Jeda Antar Slot Rak (Detik)", 0.15, 1.50, 0.05, " dtk", 0.25, function(val)
-    jedaAntarRak = tonumber(val) or 0.25
+API.Slider(InputTab, "Jeda Antar Slot Rak (Detik)", 0.15, 1.50, 0.05, " dtk", 0.30, function(val)
+    jedaAntarRak = tonumber(val) or 0.30
 end)
 
 API.Toggle(InputTab, "Auto Isi Rak Kosong (Otomatis)", false, function(val)
