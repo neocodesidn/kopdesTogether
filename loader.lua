@@ -1,4 +1,4 @@
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Players = game:GetService("Players")
 local VirtualUser = game:GetService("VirtualUser")
@@ -14,22 +14,38 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local REPO_PLUGINS = "https://raw.githubusercontent.com/neocodesidn/kopdesTogether/main/plugins/"
 
 local DaftarPlugin = {
-    { id = "restok",        name = "Auto Restok (Gudang-Safe)",    file = "auto_restok.lua" },
-    { id = "shop_ops",      name = "Auto Kasir & Anti-Pencuri",    file = "shop_ops.lua" },
-    { id = "payroll",       name = "Auto Payroll & Deposit",       file = "auto_payroll.lua" },
-    { id = "smart_payroll", name = "Smart Payroll (Profit Share)", file = "smart_payroll.lua" },
-    { id = "sewa_pekerja",  name = "Sewa Pekerja (NPC Staff)",     file = "sewa_pekerja.lua" },
-    { id = "quest",         name = "Auto Claim Quest",             file = "auto_quest.lua" },
-    { id = "webhook",       name = "Discord Webhook V2",           file = "discord_log.lua" },
+    { id = "restok",        name = "Auto Restok (Gudang-Safe)",     file = "auto_restok.lua" },
+    { id = "shop_ops",      name = "Auto Kasir & Anti-Pencuri",     file = "shop_ops.lua" },
+    { id = "sound_system",  name = "Sound System (Remote Speaker)", file = "sound_system.lua" },
+    { id = "payroll",       name = "Auto Payroll & Deposit",        file = "auto_payroll.lua" },
+    { id = "smart_payroll", name = "Smart Payroll (Profit Share)",  file = "smart_payroll.lua" },
+    { id = "sewa_pekerja",  name = "Sewa Pekerja (NPC Staff)",      file = "sewa_pekerja.lua" },
+    { id = "quest",         name = "Auto Claim Quest",              file = "auto_quest.lua" },
+    { id = "webhook",       name = "Discord Webhook V2",            file = "discord_log.lua" },
 }
 
 -- ==========================================
--- WINDOW UTAMA RAYFIELD GEN 2
+-- WINDOW UTAMA RAYFIELD VERSI BIASA (CLASSIC)
 -- ==========================================
 local Window = Rayfield:CreateWindow({
-    name = "Kopdes Together | v2.1",
-    subtitle = "Cheese Dev - Modular Suite",
-    sidebarLayout = true,
+    Name = "Kopdes Together | v2.2",
+    Icon = 0,
+    LoadingTitle = "Kopdes Together Suite",
+    LoadingSubtitle = "Cheese Dev • Modular Edition",
+    Theme = "Default",
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
+    ConfigurationSaving = {
+        Enabled = false,
+        FolderName = "KopdesTogether",
+        FileName = "Config"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "cheesedev",
+        RememberJoins = true
+    },
+    KeySystem = false
 })
 
 -- ==========================================
@@ -37,6 +53,12 @@ local Window = Rayfield:CreateWindow({
 -- ==========================================
 local EventListeners = {}
 local LoadedPlugins = {}
+local flagCounter = 0
+
+local function nextFlag(prefix)
+    flagCounter = flagCounter + 1
+    return prefix .. "_" .. tostring(flagCounter)
+end
 
 local function formatRupiah(angka)
     local formatted = tostring(math.floor(tonumber(angka) or 0))
@@ -49,7 +71,7 @@ local function formatRupiah(angka)
 end
 
 local KopdesAPI = {
-    Version = "2.1",
+    Version = "2.2",
     Rayfield = Rayfield,
     Window = Window,
     Players = Players,
@@ -80,76 +102,75 @@ function KopdesAPI.Emit(eventName, data)
     end
 end
 
+-- ==========================================
+-- ADAPTER UI RAYFIELD CLASSIC (PASCALCASE)
+-- ==========================================
 function KopdesAPI.Notify(title, content, duration)
     pcall(function()
         Rayfield:Notify({
-            title = title,
-            content = content,
-            duration = duration or 3,
+            Title = title,
+            Content = content,
+            Duration = duration or 3,
+            Image = 4483362458,
         })
     end)
 end
 
 function KopdesAPI.CreateTab(name, iconId)
-    local ok, tab = pcall(function()
-        if iconId then
-            return Window:CreateTab({ name = name, icon = iconId })
-        end
-        return Window:CreateTab({ name = name })
-    end)
-    if ok and tab then return tab end
-    return Window:CreateTab({ name = name })
+    return Window:CreateTab(name, iconId or 4483362458)
 end
 
 function KopdesAPI.Section(tab, title)
-    local ok = pcall(function()
-        tab:CreateSection({ name = title })
-    end)
-    if not ok then
-        pcall(function() tab:CreateSection(title) end)
-    end
+    return tab:CreateSection(title)
 end
 
 function KopdesAPI.Paragraph(tab, title, content)
     local ok, obj = pcall(function()
-        return tab:CreateParagraph({ title = title, content = content })
+        return tab:CreateParagraph({
+            Title = title,
+            Content = content
+        })
     end)
     return ok and obj or nil
 end
 
 function KopdesAPI.Button(tab, name, callback)
     return tab:CreateButton({
-        name = name,
-        callback = callback,
+        Name = name,
+        Callback = callback,
     })
 end
 
 function KopdesAPI.Toggle(tab, name, defaultVal, callback)
     return tab:CreateToggle({
-        name = name,
-        currentValue = defaultVal or false,
-        callback = callback,
+        Name = name,
+        CurrentValue = defaultVal or false,
+        Flag = nextFlag("Toggle"),
+        Callback = callback,
     })
 end
 
 function KopdesAPI.Slider(tab, name, minVal, maxVal, inc, suffix, defaultVal, callback)
     return tab:CreateSlider({
-        name = name,
-        range = { minVal, maxVal },
-        increment = inc or 1,
-        suffix = suffix or "",
-        currentValue = defaultVal or minVal,
-        callback = callback,
+        Name = name,
+        Range = { minVal, maxVal },
+        Increment = inc or 1,
+        Suffix = suffix or "",
+        CurrentValue = defaultVal or minVal,
+        Flag = nextFlag("Slider"),
+        Callback = callback,
     })
 end
 
 function KopdesAPI.Dropdown(tab, name, options, defaultOpt, callback)
+    local awal = defaultOpt or options[1]
     return tab:CreateDropdown({
-        name = name,
-        options = options,
-        currentOption = defaultOpt or options[1],
-        multipleOptions = false,
-        callback = function(selected)
+        Name = name,
+        Options = options,
+        CurrentOption = awal and { awal } or {},
+        MultipleOptions = false,
+        Flag = nextFlag("Dropdown"),
+        Callback = function(selected)
             local val = (typeof(selected) == "table" and selected[1]) or selected
             if callback then callback(val) end
         end,
@@ -158,10 +179,12 @@ end
 
 function KopdesAPI.Input(tab, name, placeholder, callback)
     return tab:CreateInput({
-        name = name,
-        placeholderText = placeholder or "",
-        removeTextAfterFocusLost = false,
-        callback = callback,
+        Name = name,
+        CurrentValue = "",
+        PlaceholderText = placeholder or "",
+        RemoveTextAfterFocusLost = false,
+        Flag = nextFlag("Input"),
+        Callback = callback,
     })
 end
 
@@ -169,16 +192,10 @@ function KopdesAPI.SetElementText(elem, newText, newContent)
     if not elem then return end
     pcall(function()
         if elem.Set then
-            if newContent then
-                elem:Set({ title = newText, content = newContent })
+            if newContent ~= nil then
+                elem:Set({ Title = newText, Content = newContent })
             else
                 elem:Set(newText)
-            end
-        elseif elem.Update then
-            if newContent then
-                elem:Update({ title = newText, content = newContent })
-            else
-                elem:Update(newText)
             end
         end
     end)
@@ -198,7 +215,7 @@ end)
 -- ==========================================
 -- TAB 1: DASHBOARD & PLUGIN MANAGER
 -- ==========================================
-local HomeTab = KopdesAPI.CreateTab("Dashboard", 93364949241311)
+local HomeTab = KopdesAPI.CreateTab("Dashboard", 4483362458)
 
 KopdesAPI.Section(HomeTab, "Live Status Koperasi")
 local StatusCard = KopdesAPI.Paragraph(
