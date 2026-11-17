@@ -12,6 +12,7 @@ local PlaceOilRemote = KardusRemotes and KardusRemotes:FindFirstChild("PlaceOil"
 -- ==========================================
 local function dapatkanPlotToko()
     local lp = API.LocalPlayer
+
     for _, obj in ipairs(Workspace:GetChildren()) do
         if obj.Name:match("^Plot%d+$") and obj:FindFirstChild("ClickObject") then
             local ownerAttr = obj:GetAttribute("Owner") or obj:GetAttribute("UserId")
@@ -27,6 +28,7 @@ local function dapatkanPlotToko()
             end
         end
     end
+
     return (API and API.Plot) or Workspace:WaitForChild("Plot1")
 end
 
@@ -51,7 +53,7 @@ local kataGenerik = {
 }
 
 -- ==========================================
--- DETEKSI NAMA PRODUK KARDUS (SEMUA KATEGORI DITERIMA)
+-- DETEKSI NAMA PRODUK KARDUS
 -- ==========================================
 local function deteksiNamaProdukKardus(objKardus)
     if not objKardus then return "Produk" end
@@ -110,8 +112,8 @@ local function ambilSemuaKardusDiLantai()
 end
 
 -- ==========================================
--- PEMINDAIAN SLOT KOSONG DI RakPenyimpananX (InputRak.Rak1..Rak6)
--- Struktur terisi: RakX -> KardusX -> Kardus (Model)
+-- CEK SLOT KOSONG SINKRON KETAT: RakX.KardusX
+-- (Rak1 -> Kardus1, Rak2 -> Kardus2, ..., Rak6 -> Kardus6)
 -- ==========================================
 local function apakahSlotGudangKosong(rakPart, slotIndex)
     if not rakPart or not rakPart:IsA("BasePart") then return false end
@@ -120,20 +122,17 @@ local function apakahSlotGudangKosong(rakPart, slotIndex)
         return false
     end
 
-    -- Cek model KardusX (misal Rak4 -> Kardus4)
-    local kardusContainer = rakPart:FindFirstChild("Kardus" .. tostring(slotIndex))
-        or rakPart:FindFirstChildWhichIsA("Model")
+    -- Sinkron wajib 1-ke-1: Rak{slotIndex}.Kardus{slotIndex}
+    local namaContainerSinkron = "Kardus" .. tostring(slotIndex)
+    local kardusContainer = rakPart:FindFirstChild(namaContainerSinkron)
 
-    if kardusContainer then
-        -- Jika di dalam KardusX sudah ada Model "Kardus", berarti slot TERISI
-        local isiKardus = kardusContainer:FindFirstChild("Kardus")
-        if isiKardus then
-            return false
-        end
+    -- Jika Kardus{slotIndex} belum ada di dalam Rak{slotIndex}, slot pasti KOSONG
+    if not kardusContainer then
+        return true
     end
 
-    -- Jika ada child langsung bernama "Kardus" di dalam RakX, berarti slot TERISI
-    if rakPart:FindFirstChild("Kardus") then
+    -- Jika di dalam Rak{slotIndex}.Kardus{slotIndex} sudah ada Model "Kardus", slot TERISI
+    if kardusContainer:FindFirstChild("Kardus") ~= nil then
         return false
     end
 
@@ -150,7 +149,6 @@ local function cariSemuaSlotGudangKosong()
         end
     end
 
-    -- Urutkan RakPenyimpanan1, RakPenyimpanan2, dst.
     table.sort(daftarRakGudang, function(a, b)
         local numA = tonumber(a.Name:match("%d+")) or 9999
         local numB = tonumber(b.Name:match("%d+")) or 9999
@@ -173,7 +171,7 @@ local function cariSemuaSlotGudangKosong()
         end
     end
 
-    return daftarSlotKosong
+    return daftarSlotKosong, #daftarRakGudang
 end
 
 -- ==========================================
@@ -265,7 +263,7 @@ local function ambilSatuKardusGudang(detailKardus)
 end
 
 -- ==========================================
--- EKSEKUSI UTAMA (SIMPAN KARDUS KE RakPenyimpananX)
+-- EKSEKUSI UTAMA (PINDAHKAN KARDUS KE RakPenyimpananX)
 -- ==========================================
 local function jalankanSiklusIsiGudang(abaikanToggle)
     if sedangMengisiGudang then return 0 end
@@ -300,7 +298,7 @@ local function jalankanSiklusIsiGudang(abaikanToggle)
 
             if not picked then break end
 
-            -- Langsung taruh kardus ke RakPenyimpananX.InputRak.Rak1..Rak6
+            -- Server memindahkan objek Kardus ke dalam Rak{slotIdx}.Kardus{slotIdx}
             PlaceOilRemote:FireServer(targetSlot)
 
             local terkonfirmasi = false
@@ -338,7 +336,7 @@ API.Section(GudangTab, "Informasi Rak Penyimpanan (" .. PlotToko.Name .. ")")
 local StatusGudangCard = API.Paragraph(
     GudangTab,
     "Target: RakPenyimpananX (6 Kardus / Rak)",
-    "Mengangkut semua jenis kardus dari lantai ke slot kosong Rak1 - Rak6 tanpa membongkar isi produk."
+    "Memindahkan kardus dari lantai ke slot kosong sinkron Rak1.Kardus1 - Rak6.Kardus6."
 )
 
 API.Section(GudangTab, "Kontrol Auto Simpan Gudang")
@@ -350,7 +348,7 @@ API.Toggle(GudangTab, "Auto Simpan Kardus ke Gudang (Otomatis)", false, function
     autoGudangEnabled = val
     API.Notify(
         val and "Auto Gudang Aktif" or "Auto Gudang Mati",
-        val and "Menyimpan semua kardus ke slot kosong RakPenyimpananX." or "Auto simpan gudang dihentikan.",
+        val and "Memindahkan kardus ke slot kosong sinkron RakX.KardusX." or "Auto simpan gudang dihentikan.",
         3
     )
 end)
@@ -363,7 +361,7 @@ API.Button(GudangTab, "Isi Semua RakPenyimpanan Sekarang (1x)", function()
             return
         end
         local hasil = jalankanSiklusIsiGudang(true)
-        API.Notify("Selesai", "Berhasil menyimpan " .. tostring(hasil) .. " kardus ke RakPenyimpanan.", 3)
+        API.Notify("Selesai", "Berhasil memindahkan " .. tostring(hasil) .. " kardus ke RakPenyimpanan.", 3)
     end)
 end)
 
@@ -378,18 +376,18 @@ end)
 -- ==========================================
 task.spawn(function()
     while true do
-        local slotKosong = cariSemuaSlotGudangKosong()
+        local slotKosong, totalRakGudang = cariSemuaSlotGudangKosong()
         local kardusLantai = ambilSemuaKardusDiLantai()
         local picked = cariKardusPickedDiKarakter()
 
-        local teksStatus = "Status: Nonaktif (Semua Kategori Produk)"
+        local teksStatus = "Rak Terdeteksi: " .. tostring(totalRakGudang) .. " | Status: Nonaktif"
         if autoGudangEnabled then
-            teksStatus = (#slotKosong > 0 and "Status: Menyimpan kardus ke RakPenyimpanan..." or "Status: Siaga (Semua slot gudang penuh)")
+            teksStatus = "Rak Terdeteksi: " .. tostring(totalRakGudang) .. " | " .. (#slotKosong > 0 and "Status: Memindahkan kardus..." or "Status: Semua slot penuh")
         end
 
         API.SetElementText(
             StatusGudangCard,
-            "Slot Gudang Kosong: " .. tostring(#slotKosong) .. "  |  Kardus Tersedia: " .. tostring(#kardusLantai),
+            "Slot Kosong: " .. tostring(#slotKosong) .. "  |  Kardus Lantai: " .. tostring(#kardusLantai),
             teksStatus
         )
 
