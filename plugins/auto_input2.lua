@@ -35,35 +35,73 @@ local PlotToko = dapatkanPlotToko()
 local clickObject = PlotToko:WaitForChild("ClickObject")
 
 -- ==========================================
--- KONFIGURASI KAPASITAS & STATE KARDUS DI TANGAN
+-- WHITELIST PRODUK DARI ReplicatedStorage.Product.Makanan
 -- ==========================================
-local KAPASITAS_MAKS_PAPAN = 12 -- Maksimal 12 item di dalam ClientItemInstances per Rak1-Rak8
+local ProductFolder = ReplicatedStorage:WaitForChild("Product", 10)
+local MakananFolder = ProductFolder and ProductFolder:WaitForChild("Makanan", 10)
+
+local daftarProdukMakanan = {}
+local totalProdukTerdaftar = 0
+
+local function normalisasiNamaProduk(nama)
+    return tostring(nama):lower():gsub("%s+", ""):gsub("[^%w]", "")
+end
+
+local function muatWhitelistMakanan()
+    daftarProdukMakanan = {}
+    totalProdukTerdaftar = 0
+    if not MakananFolder then return end
+
+    local function daftarkanObjekProduk(obj)
+        if not obj or obj.Name == "" then return end
+        local key = normalisasiNamaProduk(obj.Name)
+        if key ~= "" and not daftarProdukMakanan[key] then
+            daftarProdukMakanan[key] = {
+                canonicalName = obj.Name,
+                model = obj
+            }
+            totalProdukTerdaftar = totalProdukTerdaftar + 1
+        end
+    end
+
+    for _, kategori in ipairs(MakananFolder:GetChildren()) do
+        if kategori:IsA("Folder") or kategori:IsA("Configuration") then
+            for _, item in ipairs(kategori:GetChildren()) do
+                daftarkanObjekProduk(item)
+            end
+        else
+            daftarkanObjekProduk(kategori)
+        end
+    end
+end
+
+muatWhitelistMakanan()
+
+local function ambilDataProdukMakanan(nama)
+    if not nama or nama == "" then return nil end
+    local key = normalisasiNamaProduk(nama)
+    if daftarProdukMakanan[key] then
+        return daftarProdukMakanan[key]
+    end
+    muatWhitelistMakanan()
+    return daftarProdukMakanan[key]
+end
+
+-- ==========================================
+-- KONFIGURASI AUTO INPUT (MODE SLOT KOSONG 0/12)
+-- ==========================================
+local KAPASITAS_MAKS_PAPAN = 12
 local autoPlaceRakEnabled = false
 local jedaAntarRak = 0.25
 local sedangMengisiRak = false
 local rakDitolakServer = {}
 
--- State pelacakan sisa isi kardus yang sedang dipegang agar tidak hilang/tertimpa
-local stokKardusDiTangan = 0
-local namaItemDiTangan = nil
-
-local kataKunciFurnitur = { "rakkecil", "rakbelanja", "kasir", "meja", "kulkas", "freezer", "lampu", "pintu", "dinding", "etalase" }
-
-local function apakahFurnitur(nama)
-    local lower = tostring(nama):lower()
-    for _, kata in ipairs(kataKunciFurnitur) do
-        if lower:find(kata, 1, true) then
-            return true
-        end
-    end
-    return false
-end
-
 -- ==========================================
--- DETEKSI KARDUS VALID DI LANTAI TOKO
+-- DETEKSI KARDUS KATEGORI MAKANAN DI LANTAI
 -- ==========================================
 local function bacaDetailKardus(kardus)
     local namaDitemukan = nil
+    local dariDisplayText = false
     local jumlahIsi = KAPASITAS_MAKS_PAPAN
 
     for _, attrName in ipairs({ "ItemName", "Product", "Nama", "Item", "Produk", "Barang" }) do
@@ -90,6 +128,7 @@ local function bacaDetailKardus(kardus)
                 local bersih = desc.Text:gsub("%s*%b()", ""):gsub("^%s+", ""):gsub("%s+$", "")
                 if bersih ~= "" and bersih:lower() ~= "kardus" and not bersih:match("^[xX]?%d+[/]?%d*$") then
                     namaDitemukan = bersih
+                    dariDisplayText = true
                 end
             end
         end
@@ -109,18 +148,21 @@ local function bacaDetailKardus(kardus)
         end
     end
 
-    if not namaDitemukan or namaDitemukan == "" or apakahFurnitur(namaDitemukan) then
+    local infoMakanan = ambilDataProdukMakanan(namaDitemukan)
+    if not infoMakanan then
         return nil
     end
 
+    local namaFinal = dariDisplayText and infoMakanan.canonicalName or namaDitemukan
+
     return {
         obj = kardus,
-        nama = namaDitemukan,
+        nama = namaFinal,
         jumlah = math.clamp(jumlahIsi, 1, KAPASITAS_MAKS_PAPAN)
     }
 end
 
-local function ambilSemuaKardusTersedia()
+local function ambilSemuaKardusMakanan()
     local daftar = {}
     for _, v in ipairs(clickObject:GetChildren()) do
         if v.Name == "Kardus" then
@@ -134,7 +176,7 @@ local function ambilSemuaKardusTersedia()
 end
 
 -- ==========================================
--- PEMINDAIAN Rak1 - Rak8 & ISI ClientItemInstances
+-- PEMINDAIAN SLOT KOSONG MURNI (0/12) DI Rak1 - Rak8
 -- ==========================================
 local function dapatkanFolderItemPapan(rakPart)
     return rakPart:FindFirstChild("ClientItemInstances")
@@ -142,18 +184,25 @@ local function dapatkanFolderItemPapan(rakPart)
         or rakPart:FindFirstChild("InstanceItem")
 end
 
-local function bacaStatusIsiPapan(rakPart)
-    local folderItem = dapatkanFolderItemPapan(rakPart)
-    if not folderItem then
-        return 0, nil
+local function apakahSlotMurniKosong(rakPart)
+    if not rakPart or not rakPart:IsA("BasePart") then return false end
+
+    -- Skip slot yang baru saja ditolak server
+    if rakDitolakServer[rakPart] and tick() < rakDitolakServer[rakPart] then
+        return false
     end
-    local children = folderItem:GetChildren()
-    local namaProdukAda = (#children > 0) and children[1].Name or nil
-    return #children, namaProdukAda
+
+    -- Jika sudah ada item (misal 6/12, 8/12, atau 12/12), WAJIB SKIP
+    local folderItem = dapatkanFolderItemPapan(rakPart)
+    if folderItem and #folderItem:GetChildren() > 0 then
+        return false
+    end
+
+    return true
 end
 
-local function cariSemuaPapanBelumPenuh()
-    local daftarTarget = {}
+local function cariSemuaSlotKosong()
+    local daftarSlotKosong = {}
     local daftarModelRak = {}
 
     for _, modelRak in ipairs(clickObject:GetChildren()) do
@@ -171,82 +220,55 @@ local function cariSemuaPapanBelumPenuh()
         return a.Name < b.Name
     end)
 
-    -- Wajib periksa berurutan dari Rak1 sampai Rak8 per RakBelanja
+    -- Periksa berurutan dari Rak1 sampai Rak8; ambil HANYA yang kosong 0/12
     for _, modelRak in ipairs(daftarModelRak) do
         local inputRak = modelRak:FindFirstChild("InputRak")
         if inputRak then
             for i = 1, 8 do
                 local slotPart = inputRak:FindFirstChild("Rak" .. tostring(i))
-                if slotPart and slotPart:IsA("BasePart") then
-                    local skip = rakDitolakServer[slotPart] and tick() < rakDitolakServer[slotPart]
-                    if not skip then
-                        local terisi, namaProdukAda = bacaStatusIsiPapan(slotPart)
-                        if terisi < KAPASITAS_MAKS_PAPAN then
-                            table.insert(daftarTarget, {
-                                part = slotPart,
-                                terisi = terisi,
-                                sisaSlot = KAPASITAS_MAKS_PAPAN - terisi,
-                                namaProdukAda = namaProdukAda
-                            })
-                        end
-                    end
+                if slotPart and apakahSlotMurniKosong(slotPart) then
+                    table.insert(daftarSlotKosong, slotPart)
                 end
             end
         end
     end
 
-    return daftarTarget
+    return daftarSlotKosong
 end
 
 -- ==========================================
--- KALKULASI TITIK GRID CFRAME (ISI SLOT KOSONG SAJA)
+-- KALKULASI GRID CFRAME 4x3 (12 ITEM)
 -- ==========================================
 local modelSizeCache = {}
 local function cariUkuranModelProduk(itemName)
-    local key = itemName:lower()
+    local key = normalisasiNamaProduk(itemName)
     if modelSizeCache[key] then
         return modelSizeCache[key]
     end
 
-    for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
-        if desc.Name:lower() == key then
-            if desc:IsA("Model") then
-                local sz = desc:GetExtentsSize()
-                if sz.Magnitude > 0.05 then
-                    modelSizeCache[key] = sz
-                    return sz
-                end
-            elseif desc:IsA("BasePart") and desc.Size.Magnitude > 0.05 then
-                modelSizeCache[key] = desc.Size
-                return desc.Size
+    local infoMakanan = ambilDataProdukMakanan(itemName)
+    local sumberObj = infoMakanan and infoMakanan.model
+
+    if sumberObj then
+        if sumberObj:IsA("Model") then
+            local sz = sumberObj:GetExtentsSize()
+            if sz.Magnitude > 0.05 then
+                modelSizeCache[key] = sz
+                return sz
             end
+        elseif sumberObj:IsA("BasePart") and sumberObj.Size.Magnitude > 0.05 then
+            modelSizeCache[key] = sumberObj.Size
+            return sumberObj.Size
         end
     end
+
     return nil
 end
 
-local function ambilPosisiItemEksisting(rakPart)
-    local posisiList = {}
-    local folderItem = dapatkanFolderItemPapan(rakPart)
-    if not folderItem then return posisiList end
-
-    for _, item in ipairs(folderItem:GetChildren()) do
-        if item:IsA("BasePart") then
-            table.insert(posisiList, item.Position)
-        elseif item:IsA("Model") then
-            local ok, cf = pcall(function() return item:GetPivot() end)
-            if ok and cf then
-                table.insert(posisiList, cf.Position)
-            end
-        end
-    end
-    return posisiList
-end
-
-local function buatBatchPenempatanRak(rakPart, itemName, jumlahKirim)
+local function buatBatchPenempatanRak(rakPart, itemName, jumlahItem)
     local cols = 4
     local rows = 3
-    local targetJumlah = math.clamp(jumlahKirim, 1, KAPASITAS_MAKS_PAPAN)
+    local totalPlace = math.clamp(jumlahItem or KAPASITAS_MAKS_PAPAN, 1, KAPASITAS_MAKS_PAPAN)
 
     local rakW = rakPart.Size.X
     local rakH = rakPart.Size.Y
@@ -273,96 +295,43 @@ local function buatBatchPenempatanRak(rakPart, itemName, jumlahKirim)
     local startX = -((cols - 1) * slotW) / 2
     local startZ = -((rows - 1) * slotD) / 2
 
-    local semuaTitik = {}
-    for i = 0, KAPASITAS_MAKS_PAPAN - 1 do
+    local daftarPenempatan = {}
+    for i = 0, totalPlace - 1 do
         local col = i % cols
         local row = math.floor(i / cols)
         local offX = startX + (col * slotW)
         local offZ = startZ + (row * slotD)
-        table.insert(semuaTitik, rakPart.CFrame * CFrame.new(offX, offsetY, offZ))
-    end
 
-    -- Lewati titik koordinat yang sudah ditempati item di papan
-    local posisiTerisi = ambilPosisiItemEksisting(rakPart)
-    local titikKosong = {}
-    local titikTerpakai = {}
-
-    for _, cf in ipairs(semuaTitik) do
-        local sudahAda = false
-        for _, posAda in ipairs(posisiTerisi) do
-            if (cf.Position - posAda).Magnitude < 0.35 then
-                sudahAda = true
-                break
-            end
-        end
-        if sudahAda then
-            table.insert(titikTerpakai, cf)
-        else
-            table.insert(titikKosong, cf)
-        end
-    end
-
-    local daftarPenempatan = {}
-    for _, cf in ipairs(titikKosong) do
-        if #daftarPenempatan >= targetJumlah then break end
-        table.insert(daftarPenempatan, { cf = cf, scale = scale })
-    end
-    for _, cf in ipairs(titikTerpakai) do
-        if #daftarPenempatan >= targetJumlah then break end
-        table.insert(daftarPenempatan, { cf = cf, scale = scale })
+        table.insert(daftarPenempatan, {
+            cf = rakPart.CFrame * CFrame.new(offX, offsetY, offZ),
+            scale = scale
+        })
     end
 
     return daftarPenempatan
 end
 
 -- ==========================================
--- PENGAMBILAN & PELACAKAN SISA KARDUS DI TANGAN
+-- PENGAMBILAN & VALIDASI KardusPicked DI TANGAN
 -- ==========================================
-local function sinkronkanKardusDiTangan()
+local function cekKardusDiTangan()
     local char = API.LocalPlayer.Character
     local upperTorso = char and char:FindFirstChild("UpperTorso")
     local picked = upperTorso and upperTorso:FindFirstChild("KardusPicked")
+    if not picked then return nil, nil end
 
-    if not picked then
-        stokKardusDiTangan = 0
-        namaItemDiTangan = nil
-        return nil, nil, 0
-    end
-
-    local namaAttr = nil
     for _, attrName in ipairs({ "ItemName", "Product", "Nama", "Item", "Produk", "Barang" }) do
         local val = picked:GetAttribute(attrName)
         if typeof(val) == "string" and val ~= "" then
-            namaAttr = val
-            break
+            return picked, val
         end
     end
-    if not namaAttr then
-        for _, desc in ipairs(picked:GetDescendants()) do
-            if desc:IsA("StringValue") and desc.Value ~= "" then
-                namaAttr = desc.Value
-                break
-            end
+    for _, desc in ipairs(picked:GetDescendants()) do
+        if desc:IsA("StringValue") and desc.Value ~= "" then
+            return picked, desc.Value
         end
     end
-
-    local stokAttr = nil
-    for _, attrQty in ipairs({ "Stock", "Jumlah", "Count", "Isi", "Amount", "Qty" }) do
-        local q = picked:GetAttribute(attrQty)
-        if typeof(q) == "number" and q > 0 then
-            stokAttr = q
-            break
-        end
-    end
-
-    if namaAttr then namaItemDiTangan = namaAttr end
-    if stokAttr then
-        stokKardusDiTangan = math.clamp(stokAttr, 1, KAPASITAS_MAKS_PAPAN)
-    elseif stokKardusDiTangan <= 0 then
-        stokKardusDiTangan = KAPASITAS_MAKS_PAPAN
-    end
-
-    return picked, namaItemDiTangan, stokKardusDiTangan
+    return picked, nil
 end
 
 local function picuInteraksiKardus(kardusObj)
@@ -380,16 +349,15 @@ local function ambilSatuKardusAman(detailKardus)
     local char = API.LocalPlayer.Character
     local upperTorso = char and char:FindFirstChild("UpperTorso")
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not upperTorso then return nil, nil, 0 end
+    if not upperTorso then return nil, nil end
 
-    -- Jangan ambil kardus baru jika masih ada sisa di KardusPicked
-    local existing, existingNama, existingStok = sinkronkanKardusDiTangan()
-    if existing and existingStok > 0 then
-        return existing, (existingNama or detailKardus.nama), existingStok
+    local existing, existingNama = cekKardusDiTangan()
+    if existing then
+        return existing, (existingNama or detailKardus.nama)
     end
 
     local kardusObj = detailKardus.obj
-    if not kardusObj or not kardusObj.Parent then return nil, nil, 0 end
+    if not kardusObj or not kardusObj.Parent then return nil, nil end
 
     picuInteraksiKardus(kardusObj)
     local picked = upperTorso:WaitForChild("KardusPicked", 0.30)
@@ -415,53 +383,15 @@ local function ambilSatuKardusAman(detailKardus)
 
     if picked and PickupKardusRemote then
         PickupKardusRemote:FireServer(picked, detailKardus.nama)
-        namaItemDiTangan = detailKardus.nama
-        stokKardusDiTangan = detailKardus.jumlah or KAPASITAS_MAKS_PAPAN
         task.wait(0.10)
-        return picked, namaItemDiTangan, stokKardusDiTangan
+        return picked, detailKardus.nama
     end
 
-    return nil, nil, 0
+    return nil, nil
 end
 
 -- ==========================================
--- PEMILIHAN TARGET RAK BERURUTAN (Rak1 - Rak8) & OPER SISA
--- ==========================================
-local function cariPapanCocokUntukItem(daftarTarget, namaItem)
-    -- Pindai urut dari Rak1 ke Rak8: pilih papan pertama yang masih butuh item
-    -- (baik terisi sebagian dengan produk yang sama maupun papan kosong 0/12)
-    for _, t in ipairs(daftarTarget) do
-        if not t.namaProdukAda or t.namaProdukAda:lower() == namaItem:lower() then
-            return t
-        end
-    end
-    return nil
-end
-
-local function pilihKardusSesuaiUrutanRak(daftarTarget, daftarKardus)
-    -- Prioritaskan melengkapi papan pertama yang sudah berisi sebagian (misal Rak2 isi 8/12)
-    for _, t in ipairs(daftarTarget) do
-        if t.namaProdukAda then
-            for _, k in ipairs(daftarKardus) do
-                if k.nama:lower() == t.namaProdukAda:lower() then
-                    return k
-                end
-            end
-        end
-    end
-
-    -- Jika papan terdepan kosong (0/12), ambil kardus pertama yang punya target papan cocok
-    for _, k in ipairs(daftarKardus) do
-        if cariPapanCocokUntukItem(daftarTarget, k.nama) then
-            return k
-        end
-    end
-
-    return nil
-end
-
--- ==========================================
--- EKSEKUSI UTAMA (TOP-UP + OPER SISA KE RAK BERIKUTNYA)
+-- EKSEKUSI UTAMA (HANYA ISI SLOT KOSONG 0/12)
 -- ==========================================
 local function jalankanSiklusIsiRak(abaikanToggle)
     if sedangMengisiRak then return 0 end
@@ -470,83 +400,73 @@ local function jalankanSiklusIsiRak(abaikanToggle)
     end
 
     sedangMengisiRak = true
-    local totalItemMasuk = 0
+    local slotTerisiCount = 0
+    local namaItemTerakhir = nil
+    local jumlahItemTerakhir = KAPASITAS_MAKS_PAPAN
 
     pcall(function()
         while abaikanToggle or autoPlaceRakEnabled do
-            local daftarTarget = cariSemuaPapanBelumPenuh()
-            if #daftarTarget == 0 then break end
+            local daftarSlotKosong = cariSemuaSlotKosong()
+            if #daftarSlotKosong == 0 then break end
 
-            local picked, itemAktif, sisaDiTangan = sinkronkanKardusDiTangan()
+            local targetRak = daftarSlotKosong[1]
+            if not targetRak or not targetRak.Parent then break end
 
-            -- Hanya ambil kardus baru dari lantai jika kardus sebelumnya sudah habis (0)
-            if not picked or sisaDiTangan <= 0 then
-                local daftarKardus = ambilSemuaKardusTersedia()
+            -- Cek apakah sudah memegang kardus; jika belum, ambil 1 kardus Makanan dari lantai
+            local picked, itemAktif = cekKardusDiTangan()
+            local jumlahKirim = jumlahItemTerakhir
+
+            if picked then
+                itemAktif = itemAktif or namaItemTerakhir
+            else
+                local daftarKardus = ambilSemuaKardusMakanan()
                 if #daftarKardus == 0 then break end
 
-                local kardusPilihan = pilihKardusSesuaiUrutanRak(daftarTarget, daftarKardus)
-                if not kardusPilihan then break end
-
-                picked, itemAktif, sisaDiTangan = ambilSatuKardusAman(kardusPilihan)
+                local kardusPilihan = daftarKardus[1]
+                picked, itemAktif = ambilSatuKardusAman(kardusPilihan)
+                namaItemTerakhir = itemAktif
+                jumlahItemTerakhir = kardusPilihan.jumlah or KAPASITAS_MAKS_PAPAN
+                jumlahKirim = jumlahItemTerakhir
             end
 
-            if not picked or not itemAktif or sisaDiTangan <= 0 or apakahFurnitur(itemAktif) then
+            if not picked or not itemAktif or not ambilDataProdukMakanan(itemAktif) then
                 break
             end
 
-            -- Cari papan Rak1-Rak8 pertama yang cocok untuk menampung sisaDiTangan
-            local targetInfo = cariPapanCocokUntukItem(daftarTarget, itemAktif)
-            if not targetInfo then
-                -- Tidak ada papan yang cocok untuk item di tangan; berhenti aman tanpa membuang kardus
-                break
-            end
-
-            local targetRak = targetInfo.part
-            local isiSebelum = bacaStatusIsiPapan(targetRak)
-            local jumlahKirim = math.min(targetInfo.sisaSlot, sisaDiTangan)
-
-            -- Tahap 2: PlaceOil
+            -- Tahap 2: PlaceOil ke slot kosong (0/12)
             PlaceOilRemote:FireServer(targetRak)
             task.wait(0.08)
 
-            -- Tahap 3: PlaceOilDone (kirim sejumlah kekurangan slot atau sisa kardus di tangan)
+            -- Tahap 3: PlaceOilDone
             local batchData = buatBatchPenempatanRak(targetRak, itemAktif, jumlahKirim)
             PlaceOilDoneRemote:FireServer(targetRak, batchData, itemAktif)
 
-            -- Tunggu konfirmasi pertambahan item di ClientItemInstances
-            local isiSesudah = isiSebelum
+            -- Tunggu konfirmasi server sampai ClientItemInstances terisi atau KardusPicked habis
             local terkonfirmasi = false
             for _ = 1, 12 do
                 task.wait(0.10)
-                isiSesudah = bacaStatusIsiPapan(targetRak)
-                local masihAdaDiTangan = sinkronkanKardusDiTangan()
-                if isiSesudah > isiSebelum or not masihAdaDiTangan then
+                local folderItem = dapatkanFolderItemPapan(targetRak)
+                local masihDiTangan = cekKardusDiTangan()
+                if (folderItem and #folderItem:GetChildren() > 0) or not masihDiTangan then
                     terkonfirmasi = true
                     break
                 end
             end
 
             if terkonfirmasi then
-                local masukAktual = (isiSesudah > isiSebelum) and (isiSesudah - isiSebelum) or jumlahKirim
-                totalItemMasuk = totalItemMasuk + masukAktual
-
-                -- Kurangi sisa stok di tangan; jika masih bersisa (misal 12 - 4 = 8),
-                -- iterasi berikutnya langsung mengoper sisa 8 tersebut ke Rak selanjutnya!
-                stokKardusDiTangan = math.max(0, sisaDiTangan - masukAktual)
-                if stokKardusDiTangan == 0 then
-                    namaItemDiTangan = nil
-                end
-
+                namaItemTerakhir = nil
+                jumlahItemTerakhir = KAPASITAS_MAKS_PAPAN
+                slotTerisiCount = slotTerisiCount + 1
                 task.wait(jedaAntarRak)
             else
-                -- Papan ditolak server: lewati papan ini 60 detik, oper kardus di tangan ke papan berikutnya
+                -- Slot ditolak server: skip 60 detik, kardus di tangan tetap dipakai ke slot kosong berikutnya
                 rakDitolakServer[targetRak] = tick() + 60
             end
         end
     end)
 
     sedangMengisiRak = false
-    return totalItemMasuk
+    return slotTerisiCount
 end
 
 -- ==========================================
@@ -554,42 +474,43 @@ end
 -- ==========================================
 local InputTab = API.CreateTab("Input")
 
-API.Section(InputTab, "Informasi Sistem Auto Input (" .. PlotToko.Name .. ")")
+API.Section(InputTab, "Informasi Filter & Target Rak (" .. PlotToko.Name .. ")")
 local StatusInputCard = API.Paragraph(
     InputTab,
-    "Mode Oper Sisa Stok (Rak1 - Rak8 | Maks 12/Papan)",
-    "Mengisi papan kurang dari 12 item hingga penuh lalu mengoper sisa isi kardus ke rak berikutnya tanpa membuang kardus."
+    "Mode Slot Kosong 0/12 | Filter: Product.Makanan (" .. tostring(totalProdukTerdaftar) .. " item)",
+    "Melewati slot yang masih ada isinya (1..11/12) dan hanya mengisi slot kosong (0/12) di RakBelanjaX & RakBelanjaHitamX."
 )
 
 API.Section(InputTab, "Kontrol Auto Input Rak")
-API.Slider(InputTab, "Jeda Antar Pengisian (Detik)", 0.20, 1.50, 0.05, " dtk", 0.25, function(val)
+API.Slider(InputTab, "Jeda Antar Slot Rak (Detik)", 0.20, 1.50, 0.05, " dtk", 0.25, function(val)
     jedaAntarRak = tonumber(val) or 0.25
 end)
 
-API.Toggle(InputTab, "Auto Isi Rak (Oper Sisa Otomatis)", false, function(val)
+API.Toggle(InputTab, "Auto Isi Slot Kosong (Otomatis)", false, function(val)
     autoPlaceRakEnabled = val
     API.Notify(
         val and "Auto Input Aktif" or "Auto Input Mati",
-        val and "Melengkapi Rak1 - Rak8 hingga 12/12 dan mengoper sisa stok kardus secara otomatis." or "Auto input dihentikan.",
+        val and "Mengisi khusus slot kosong (0/12) dengan produk Makanan." or "Auto input dihentikan.",
         3
     )
 end)
 
-API.Button(InputTab, "Isi & Lengkapi Semua Rak Sekarang (1x)", function()
+API.Button(InputTab, "Isi Semua Slot Kosong Sekarang (1x)", function()
     task.spawn(function()
-        local daftar = cariSemuaPapanBelumPenuh()
+        local daftar = cariSemuaSlotKosong()
         if #daftar == 0 then
-            API.Notify("Semua Rak Penuh", "Seluruh papan Rak1 - Rak8 sudah terisi 12/12.", 3)
+            API.Notify("Tidak Ada Slot Kosong", "Semua papan Rak1 - Rak8 sudah terisi (tidak ada slot 0/12).", 3)
             return
         end
         local hasil = jalankanSiklusIsiRak(true)
-        API.Notify("Selesai", "Berhasil memasukkan " .. tostring(hasil) .. " item ke rak belanja.", 3)
+        API.Notify("Selesai", "Berhasil mengisi " .. tostring(hasil) .. " slot kosong dengan produk Makanan.", 3)
     end)
 end)
 
-API.Button(InputTab, "Reset Cache Rak Penuh (Pindai Ulang)", function()
+API.Button(InputTab, "Reset Cache & Refresh Daftar Makanan", function()
     rakDitolakServer = {}
-    API.Notify("Cache Direset", "Papan Rak1 - Rak8 dipindai ulang dari nomor 1.", 2)
+    muatWhitelistMakanan()
+    API.Notify("Diperbarui", "Whitelist Product.Makanan (" .. tostring(totalProdukTerdaftar) .. " produk) & cache rak direset.", 2)
 end)
 
 -- ==========================================
@@ -597,23 +518,19 @@ end)
 -- ==========================================
 task.spawn(function()
     while true do
-        local papanBelumPenuh = cariSemuaPapanBelumPenuh()
-        local kardusAda = ambilSemuaKardusTersedia()
-        local picked, itemTangan, sisaTangan = sinkronkanKardusDiTangan()
-
-        local infoTangan = (picked and sisaTangan > 0)
-            and ("  |  Sisa Tangan: " .. tostring(sisaTangan) .. " (" .. tostring(itemTangan or "?") .. ")")
-            or ""
+        local slotKosong = cariSemuaSlotKosong()
+        local kardusMakanan = ambilSemuaKardusMakanan()
+        local picked = cekKardusDiTangan()
 
         API.SetElementText(
             StatusInputCard,
-            "Papan <12: " .. tostring(#papanBelumPenuh) .. "  |  Kardus Lantai: " .. tostring(#kardusAda) .. infoTangan,
+            "Slot Kosong (0/12): " .. tostring(#slotKosong) .. "  |  Kardus Makanan: " .. tostring(#kardusMakanan),
             autoPlaceRakEnabled
-                and (#papanBelumPenuh > 0 and "Status: Mengisi & mengoper sisa ke Rak1-Rak8..." or "Status: Siaga (Semua papan 12/12)")
-                or "Status: Nonaktif (Menunggu diaktifkan)"
+                and (#slotKosong > 0 and "Status: Mengisi slot kosong Rak1-Rak8..." or "Status: Siaga (Tidak ada slot 0/12)")
+                or "Status: Nonaktif (Skip slot terisi sebagian)"
         )
 
-        if autoPlaceRakEnabled and #papanBelumPenuh > 0 and (#kardusAda > 0 or (picked and sisaTangan > 0)) then
+        if autoPlaceRakEnabled and #slotKosong > 0 and (#kardusMakanan > 0 or picked ~= nil) then
             jalankanSiklusIsiRak(false)
         end
 
