@@ -4,9 +4,11 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local KardusRemotes = API.Remotes.Kardus or ReplicatedStorage:WaitForChild("KardusRemotes", 10)
-local PickupKardusRemote = KardusRemotes and KardusRemotes:WaitForChild("PickupKardus", 5)
-local PlaceOilRemote = KardusRemotes and KardusRemotes:WaitForChild("PlaceOil", 5)
-local PlaceOilDoneRemote = KardusRemotes and KardusRemotes:WaitForChild("PlaceOilDone", 5)
+local PickupKardusRemote = KardusRemotes and KardusRemotes:FindFirstChild("PickupKardus")
+local DropKardusRemote = KardusRemotes and KardusRemotes:FindFirstChild("DropKardus")
+local DropObjectKardusRemote = KardusRemotes and KardusRemotes:FindFirstChild("DropObjectKardus")
+local PlaceOilRemote = KardusRemotes and KardusRemotes:FindFirstChild("PlaceOil")
+local PlaceOilDoneRemote = KardusRemotes and KardusRemotes:FindFirstChild("PlaceOilDone")
 
 -- ==========================================
 -- DETEKSI OTOMATIS PLOT MILIK SENDIRI
@@ -35,140 +37,257 @@ local PlotToko = dapatkanPlotToko()
 local clickObject = PlotToko:WaitForChild("ClickObject")
 
 -- ==========================================
--- WHITELIST PRODUK DARI ReplicatedStorage.Product.Makanan
+-- FILTER KETAT: HANYA ISI FOLDER Product.Makanan (Default & Lisensi)
 -- ==========================================
 local ProductFolder = ReplicatedStorage:WaitForChild("Product", 10)
-local MakananFolder = ProductFolder and ProductFolder:WaitForChild("Makanan", 10)
+local MakananFolder = ProductFolder and ProductFolder:FindFirstChild("Makanan")
 
-local daftarProdukMakanan = {}
-local totalProdukTerdaftar = 0
+local whitelistMakanan = {}
+local blacklistKategoriLain = {}
+local totalItemMakanan = 0
 
-local function normalisasiNamaProduk(nama)
-    return tostring(nama):lower():gsub("%s+", ""):gsub("[^%w]", "")
+local function normalisasiTeks(teks)
+    return tostring(teks):lower():gsub("%s+", ""):gsub("[^%w]", "")
 end
 
-local function muatWhitelistMakanan()
-    daftarProdukMakanan = {}
-    totalProdukTerdaftar = 0
-    if not MakananFolder then return end
-
-    local function daftarkanObjekProduk(obj)
-        if not obj or obj.Name == "" then return end
-        local key = normalisasiNamaProduk(obj.Name)
-        if key ~= "" and not daftarProdukMakanan[key] then
-            daftarProdukMakanan[key] = {
-                canonicalName = obj.Name,
-                model = obj
-            }
-            totalProdukTerdaftar = totalProdukTerdaftar + 1
+local function kumpulkanAliasProduk(objItem)
+    local hasil = {}
+    if objItem.Name ~= "" then
+        table.insert(hasil, objItem.Name)
+    end
+    for _, attr in ipairs({ "DisplayName", "Nama", "Title", "ProductName", "ItemName" }) do
+        local v = objItem:GetAttribute(attr)
+        if typeof(v) == "string" and v ~= "" then
+            table.insert(hasil, v)
         end
     end
+    for _, child in ipairs(objItem:GetChildren()) do
+        if child:IsA("StringValue") and child.Value ~= "" then
+            table.insert(hasil, child.Value)
+        end
+    end
+    return hasil
+end
 
-    for _, kategori in ipairs(MakananFolder:GetChildren()) do
-        if kategori:IsA("Folder") or kategori:IsA("Configuration") then
-            for _, item in ipairs(kategori:GetChildren()) do
-                daftarkanObjekProduk(item)
+local function muatDatabaseProduct()
+    whitelistMakanan = {}
+    blacklistKategoriLain = {}
+    totalItemMakanan = 0
+
+    if not ProductFolder then return end
+
+    -- 1. Hanya izinkan produk di dalam subfolder Default & Lisensi/License milik Product.Makanan
+    if MakananFolder then
+        for _, subFolder in ipairs(MakananFolder:GetChildren()) do
+            local subLower = subFolder.Name:lower()
+            local isFolderValid = subFolder:IsA("Folder") or subFolder:IsA("Configuration")
+            local isDefaultAtauLisensi = subLower == "default"
+                or subLower:find("lisensi", 1, true)
+                or subLower:find("license", 1, true)
+
+            if isFolderValid and isDefaultAtauLisensi then
+                for _, itemObj in ipairs(subFolder:GetChildren()) do
+                    local dataEntry = {
+                        canonicalName = itemObj.Name,
+                        folderSumber = subFolder.Name,
+                        model = itemObj
+                    }
+                    local sudahHitung = false
+                    for _, alias in ipairs(kumpulkanAliasProduk(itemObj)) do
+                        local key = normalisasiTeks(alias)
+                        if key ~= "" and not whitelistMakanan[key] then
+                            whitelistMakanan[key] = dataEntry
+                            if not sudahHitung then
+                                totalItemMakanan = totalItemMakanan + 1
+                                sudahHitung = true
+                            end
+                        end
+                    end
+                end
             end
-        else
-            daftarkanObjekProduk(kategori)
+        end
+    end
+
+    -- 2. Blokir total seluruh isi folder Product.Daging, Product.Minuman, Product.Sayuran, dll.
+    for _, kategoriLain in ipairs(ProductFolder:GetChildren()) do
+        if kategoriLain ~= MakananFolder then
+            local kKat = normalisasiTeks(kategoriLain.Name)
+            if kKat ~= "" then
+                blacklistKategoriLain[kKat] = true
+            end
+
+            for _, desc in ipairs(kategoriLain:GetDescendants()) do
+                if desc:IsA("Folder") or desc:IsA("Model") or desc:IsA("Configuration") then
+                    local subL = desc.Name:lower()
+                    if subL ~= "default" and not subL:find("lisensi", 1, true) and not subL:find("license", 1, true) then
+                        for _, alias in ipairs(kumpulkanAliasProduk(desc)) do
+                            local key = normalisasiTeks(alias)
+                            if key ~= "" and not whitelistMakanan[key] then
+                                blacklistKategoriLain[key] = true
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
 end
 
-muatWhitelistMakanan()
+muatDatabaseProduct()
 
-local function ambilDataProdukMakanan(nama)
+local function cekProdukMakanan(nama)
     if not nama or nama == "" then return nil end
-    local key = normalisasiNamaProduk(nama)
-    if daftarProdukMakanan[key] then
-        return daftarProdukMakanan[key]
+    local key = normalisasiTeks(nama)
+    if key == "" or blacklistKategoriLain[key] then
+        return nil
     end
-    muatWhitelistMakanan()
-    return daftarProdukMakanan[key]
+    return whitelistMakanan[key]
 end
 
 -- ==========================================
--- KONFIGURASI AUTO INPUT (MODE SLOT KOSONG 0/12)
+-- KONFIGURASI AUTO INPUT (KHUSUS SLOT KOSONG 0/12)
 -- ==========================================
 local KAPASITAS_MAKS_PAPAN = 12
 local autoPlaceRakEnabled = false
 local jedaAntarRak = 0.25
 local sedangMengisiRak = false
 local rakDitolakServer = {}
+local kardusDitolakSementara = {}
+
+local kataGenerikObjek = {
+    kardus = true, karduspicked = true, box = true, handle = true, part = true,
+    meshpart = true, union = true, unionoperation = true, lid = true, tutup = true,
+    model = true, clickdetector = true, proximityprompt = true, surfacegui = true,
+    billboardgui = true, weld = true, motor6d = true, attachment = true
+}
 
 -- ==========================================
--- DETEKSI KARDUS KATEGORI MAKANAN DI LANTAI
+-- ANALISIS KETAT ISI KARDUS (TOLAK NON-MAKANAN)
 -- ==========================================
-local function bacaDetailKardus(kardus)
-    local namaDitemukan = nil
-    local dariDisplayText = false
+local function bacaInfoKardusMakanan(objKardus)
+    if not objKardus then return nil, 12 end
+
     local jumlahIsi = KAPASITAS_MAKS_PAPAN
+    local hasilWhitelist = nil
 
-    for _, attrName in ipairs({ "ItemName", "Product", "Nama", "Item", "Produk", "Barang" }) do
-        local val = kardus:GetAttribute(attrName)
-        if typeof(val) == "string" and val ~= "" then
-            namaDitemukan = val
-            break
+    -- Cek jika ada ObjectValue yang menunjuk langsung ke hierarki Product
+    for _, desc in ipairs(objKardus:GetDescendants()) do
+        if desc:IsA("ObjectValue") and desc.Value then
+            if MakananFolder and desc.Value:IsDescendantOf(MakananFolder) then
+                local info = cekProdukMakanan(desc.Value.Name)
+                if info then return info, jumlahIsi end
+                return nil, jumlahIsi
+            elseif ProductFolder and desc.Value:IsDescendantOf(ProductFolder) then
+                return nil, jumlahIsi
+            end
         end
     end
 
+    local kandidatTeks = {}
+    local function catatTeks(raw)
+        if typeof(raw) ~= "string" or raw == "" then return end
+        local bersih = raw:gsub("%s*%b()", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        if bersih == "" or bersih:match("^[xX]?%d+[/]?%d*$") then return end
+        local key = normalisasiTeks(bersih)
+        if key ~= "" and not kataGenerikObjek[key] then
+            table.insert(kandidatTeks, bersih)
+        end
+    end
+
+    for _, attr in ipairs({ "ItemName", "Product", "Nama", "Item", "Produk", "Barang", "Category", "Kategori" }) do
+        catatTeks(objKardus:GetAttribute(attr))
+    end
+
     for _, attrQty in ipairs({ "Stock", "Jumlah", "Count", "Isi", "Amount", "Qty" }) do
-        local q = kardus:GetAttribute(attrQty)
+        local q = objKardus:GetAttribute(attrQty)
         if typeof(q) == "number" and q > 0 then
             jumlahIsi = q
             break
         end
     end
 
-    for _, desc in ipairs(kardus:GetDescendants()) do
-        if not namaDitemukan then
-            if desc:IsA("StringValue") and desc.Value ~= "" and desc.Value:lower() ~= "kardus" then
-                namaDitemukan = desc.Value
-            elseif desc:IsA("TextLabel") and desc.Text ~= "" then
-                local bersih = desc.Text:gsub("%s*%b()", ""):gsub("^%s+", ""):gsub("%s+$", "")
-                if bersih ~= "" and bersih:lower() ~= "kardus" and not bersih:match("^[xX]?%d+[/]?%d*$") then
-                    namaDitemukan = bersih
-                    dariDisplayText = true
-                end
-            end
+    for _, desc in ipairs(objKardus:GetDescendants()) do
+        for _, attr in ipairs({ "ItemName", "Product", "Nama", "Item", "Produk", "Barang", "Category", "Kategori" }) do
+            catatTeks(desc:GetAttribute(attr))
         end
 
-        if desc:IsA("IntValue") or desc:IsA("NumberValue") then
-            if desc.Value > 0 and desc.Value <= KAPASITAS_MAKS_PAPAN then
-                jumlahIsi = desc.Value
-            end
+        if desc:IsA("StringValue") then
+            catatTeks(desc.Value)
         elseif desc:IsA("TextLabel") then
-            local angkaSisa = desc.Text:match("^[xX]?(%d+)")
-            if angkaSisa then
-                local n = tonumber(angkaSisa)
+            catatTeks(desc.Text)
+            local angka = desc.Text:match("^[xX]?(%d+)")
+            if angka then
+                local n = tonumber(angka)
                 if n and n > 0 and n <= KAPASITAS_MAKS_PAPAN then
                     jumlahIsi = n
                 end
             end
+        elseif desc:IsA("IntValue") or desc:IsA("NumberValue") then
+            if desc.Value > 0 and desc.Value <= KAPASITAS_MAKS_PAPAN then
+                jumlahIsi = desc.Value
+            end
+        elseif desc:IsA("Model") or desc:IsA("BasePart") then
+            catatTeks(desc.Name)
         end
     end
 
-    local infoMakanan = ambilDataProdukMakanan(namaDitemukan)
-    if not infoMakanan then
-        return nil
+    -- Jika ada satu saja kecocokan dengan Daging/Minuman/Sayuran, langsung tolak
+    for _, teks in ipairs(kandidatTeks) do
+        local key = normalisasiTeks(teks)
+        if blacklistKategoriLain[key] then
+            return nil, jumlahIsi
+        end
+        if not hasilWhitelist and whitelistMakanan[key] then
+            hasilWhitelist = whitelistMakanan[key]
+        end
     end
 
-    local namaFinal = dariDisplayText and infoMakanan.canonicalName or namaDitemukan
+    return hasilWhitelist, math.clamp(jumlahIsi, 1, KAPASITAS_MAKS_PAPAN)
+end
 
-    return {
-        obj = kardus,
-        nama = namaFinal,
-        jumlah = math.clamp(jumlahIsi, 1, KAPASITAS_MAKS_PAPAN)
-    }
+local function apakahKardusMengandungNonMakanan(objKardus)
+    if not objKardus then return false end
+
+    for _, desc in ipairs(objKardus:GetDescendants()) do
+        if desc:IsA("ObjectValue") and desc.Value and ProductFolder and desc.Value:IsDescendantOf(ProductFolder) then
+            if not (MakananFolder and desc.Value:IsDescendantOf(MakananFolder)) then
+                return true
+            end
+        elseif desc:IsA("StringValue") and blacklistKategoriLain[normalisasiTeks(desc.Value)] then
+            return true
+        elseif desc:IsA("TextLabel") then
+            local bersih = desc.Text:gsub("%s*%b()", ""):gsub("^%s+", ""):gsub("%s+$", "")
+            if blacklistKategoriLain[normalisasiTeks(bersih)] then
+                return true
+            end
+        elseif (desc:IsA("Model") or desc:IsA("BasePart")) and blacklistKategoriLain[normalisasiTeks(desc.Name)] then
+            return true
+        end
+    end
+
+    for _, attrVal in pairs(objKardus:GetAttributes()) do
+        if typeof(attrVal) == "string" and blacklistKategoriLain[normalisasiTeks(attrVal)] then
+            return true
+        end
+    end
+
+    return false
 end
 
 local function ambilSemuaKardusMakanan()
     local daftar = {}
     for _, v in ipairs(clickObject:GetChildren()) do
         if v.Name == "Kardus" then
-            local detail = bacaDetailKardus(v)
-            if detail then
-                table.insert(daftar, detail)
+            local skip = kardusDitolakSementara[v] and tick() < kardusDitolakSementara[v]
+            if not skip and not apakahKardusMengandungNonMakanan(v) then
+                local infoMakanan, jumlah = bacaInfoKardusMakanan(v)
+                if infoMakanan then
+                    table.insert(daftar, {
+                        obj = v,
+                        nama = infoMakanan.canonicalName,
+                        jumlah = jumlah
+                    })
+                end
             end
         end
     end
@@ -187,12 +306,10 @@ end
 local function apakahSlotMurniKosong(rakPart)
     if not rakPart or not rakPart:IsA("BasePart") then return false end
 
-    -- Skip slot yang baru saja ditolak server
     if rakDitolakServer[rakPart] and tick() < rakDitolakServer[rakPart] then
         return false
     end
 
-    -- Jika sudah ada item (misal 6/12, 8/12, atau 12/12), WAJIB SKIP
     local folderItem = dapatkanFolderItemPapan(rakPart)
     if folderItem and #folderItem:GetChildren() > 0 then
         return false
@@ -212,7 +329,6 @@ local function cariSemuaSlotKosong()
         end
     end
 
-    -- Urutkan model rak dari nomor terkecil (RakBelanja1, RakBelanja2, dst.)
     table.sort(daftarModelRak, function(a, b)
         local numA = tonumber(a.Name:match("%d+")) or 9999
         local numB = tonumber(b.Name:match("%d+")) or 9999
@@ -220,7 +336,6 @@ local function cariSemuaSlotKosong()
         return a.Name < b.Name
     end)
 
-    -- Periksa berurutan dari Rak1 sampai Rak8; ambil HANYA yang kosong 0/12
     for _, modelRak in ipairs(daftarModelRak) do
         local inputRak = modelRak:FindFirstChild("InputRak")
         if inputRak then
@@ -241,12 +356,12 @@ end
 -- ==========================================
 local modelSizeCache = {}
 local function cariUkuranModelProduk(itemName)
-    local key = normalisasiNamaProduk(itemName)
+    local key = normalisasiTeks(itemName)
     if modelSizeCache[key] then
         return modelSizeCache[key]
     end
 
-    local infoMakanan = ambilDataProdukMakanan(itemName)
+    local infoMakanan = cekProdukMakanan(itemName)
     local sumberObj = infoMakanan and infoMakanan.model
 
     if sumberObj then
@@ -312,25 +427,33 @@ local function buatBatchPenempatanRak(rakPart, itemName, jumlahItem)
 end
 
 -- ==========================================
--- PENGAMBILAN & VALIDASI KardusPicked DI TANGAN
+-- PENGAMBILAN & VERIFIKASI ANTI-SALAH AMBIL TUMPUKAN
 -- ==========================================
-local function cekKardusDiTangan()
+local function jatuhkanKardusSalah(picked)
+    if DropKardusRemote then
+        pcall(function() DropKardusRemote:FireServer(picked) end)
+    end
+    if DropObjectKardusRemote then
+        pcall(function() DropObjectKardusRemote:FireServer(picked) end)
+    end
+end
+
+local function cekKardusMakananDiTangan()
     local char = API.LocalPlayer.Character
     local upperTorso = char and char:FindFirstChild("UpperTorso")
     local picked = upperTorso and upperTorso:FindFirstChild("KardusPicked")
     if not picked then return nil, nil end
 
-    for _, attrName in ipairs({ "ItemName", "Product", "Nama", "Item", "Produk", "Barang" }) do
-        local val = picked:GetAttribute(attrName)
-        if typeof(val) == "string" and val ~= "" then
-            return picked, val
-        end
+    if apakahKardusMengandungNonMakanan(picked) then
+        jatuhkanKardusSalah(picked)
+        return nil, nil
     end
-    for _, desc in ipairs(picked:GetDescendants()) do
-        if desc:IsA("StringValue") and desc.Value ~= "" then
-            return picked, desc.Value
-        end
+
+    local infoMakanan = bacaInfoKardusMakanan(picked)
+    if infoMakanan then
+        return picked, infoMakanan.canonicalName
     end
+
     return picked, nil
 end
 
@@ -351,7 +474,7 @@ local function ambilSatuKardusAman(detailKardus)
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not upperTorso then return nil, nil end
 
-    local existing, existingNama = cekKardusDiTangan()
+    local existing, existingNama = cekKardusMakananDiTangan()
     if existing then
         return existing, (existingNama or detailKardus.nama)
     end
@@ -381,17 +504,45 @@ local function ambilSatuKardusAman(detailKardus)
         end
     end
 
-    if picked and PickupKardusRemote then
-        PickupKardusRemote:FireServer(picked, detailKardus.nama)
+    if not picked then
+        return nil, nil
+    end
+
+    task.wait(0.05)
+
+    -- 1. Jika kardus makanan target masih ada di lantai, berarti kardus kulkas di sebelahnya yang terambil
+    if kardusObj.Parent == clickObject then
+        jatuhkanKardusSalah(picked)
+        kardusDitolakSementara[kardusObj] = tick() + 5
+        return nil, nil
+    end
+
+    -- 2. Tolak & jatuhkan segera jika KardusPicked terdeteksi mengandung item Daging/Minuman/Sayuran
+    if apakahKardusMengandungNonMakanan(picked) then
+        jatuhkanKardusSalah(picked)
+        return nil, nil
+    end
+
+    -- 3. Pastikan produk akhir benar-benar terdaftar di Product.Makanan (Default / Lisensi)
+    local infoMakananTangan = bacaInfoKardusMakanan(picked)
+    local namaFinal = infoMakananTangan and infoMakananTangan.canonicalName or detailKardus.nama
+
+    if not cekProdukMakanan(namaFinal) then
+        jatuhkanKardusSalah(picked)
+        return nil, nil
+    end
+
+    if PickupKardusRemote then
+        PickupKardusRemote:FireServer(picked, namaFinal)
         task.wait(0.10)
-        return picked, detailKardus.nama
+        return picked, namaFinal
     end
 
     return nil, nil
 end
 
 -- ==========================================
--- EKSEKUSI UTAMA (HANYA ISI SLOT KOSONG 0/12)
+-- EKSEKUSI UTAMA (HANYA MAKANAN -> SLOT KOSONG 0/12)
 -- ==========================================
 local function jalankanSiklusIsiRak(abaikanToggle)
     if sedangMengisiRak then return 0 end
@@ -412,8 +563,7 @@ local function jalankanSiklusIsiRak(abaikanToggle)
             local targetRak = daftarSlotKosong[1]
             if not targetRak or not targetRak.Parent then break end
 
-            -- Cek apakah sudah memegang kardus; jika belum, ambil 1 kardus Makanan dari lantai
-            local picked, itemAktif = cekKardusDiTangan()
+            local picked, itemAktif = cekKardusMakananDiTangan()
             local jumlahKirim = jumlahItemTerakhir
 
             if picked then
@@ -429,24 +579,22 @@ local function jalankanSiklusIsiRak(abaikanToggle)
                 jumlahKirim = jumlahItemTerakhir
             end
 
-            if not picked or not itemAktif or not ambilDataProdukMakanan(itemAktif) then
+            -- Jangan lanjutkan jika item tidak valid atau bukan dari subfolder Default/Lisensi Product.Makanan
+            if not picked or not itemAktif or not cekProdukMakanan(itemAktif) then
                 break
             end
 
-            -- Tahap 2: PlaceOil ke slot kosong (0/12)
             PlaceOilRemote:FireServer(targetRak)
             task.wait(0.08)
 
-            -- Tahap 3: PlaceOilDone
             local batchData = buatBatchPenempatanRak(targetRak, itemAktif, jumlahKirim)
             PlaceOilDoneRemote:FireServer(targetRak, batchData, itemAktif)
 
-            -- Tunggu konfirmasi server sampai ClientItemInstances terisi atau KardusPicked habis
             local terkonfirmasi = false
             for _ = 1, 12 do
                 task.wait(0.10)
                 local folderItem = dapatkanFolderItemPapan(targetRak)
-                local masihDiTangan = cekKardusDiTangan()
+                local masihDiTangan = cekKardusMakananDiTangan()
                 if (folderItem and #folderItem:GetChildren() > 0) or not masihDiTangan then
                     terkonfirmasi = true
                     break
@@ -459,7 +607,6 @@ local function jalankanSiklusIsiRak(abaikanToggle)
                 slotTerisiCount = slotTerisiCount + 1
                 task.wait(jedaAntarRak)
             else
-                -- Slot ditolak server: skip 60 detik, kardus di tangan tetap dipakai ke slot kosong berikutnya
                 rakDitolakServer[targetRak] = tick() + 60
             end
         end
@@ -477,8 +624,8 @@ local InputTab = API.CreateTab("Input")
 API.Section(InputTab, "Informasi Filter & Target Rak (" .. PlotToko.Name .. ")")
 local StatusInputCard = API.Paragraph(
     InputTab,
-    "Mode Slot Kosong 0/12 | Filter: Product.Makanan (" .. tostring(totalProdukTerdaftar) .. " item)",
-    "Melewati slot yang masih ada isinya (1..11/12) dan hanya mengisi slot kosong (0/12) di RakBelanjaX & RakBelanjaHitamX."
+    "Whitelist: Product.Makanan > Default & Lisensi (" .. tostring(totalItemMakanan) .. " item)",
+    "Hanya mengangkut kardus dari folder Default & Lisensi di Product.Makanan ke slot kosong (0/12) RakBelanjaX & RakBelanjaHitamX."
 )
 
 API.Section(InputTab, "Kontrol Auto Input Rak")
@@ -486,16 +633,16 @@ API.Slider(InputTab, "Jeda Antar Slot Rak (Detik)", 0.20, 1.50, 0.05, " dtk", 0.
     jedaAntarRak = tonumber(val) or 0.25
 end)
 
-API.Toggle(InputTab, "Auto Isi Slot Kosong (Otomatis)", false, function(val)
+API.Toggle(InputTab, "Auto Isi Slot Kosong Makanan (Otomatis)", false, function(val)
     autoPlaceRakEnabled = val
     API.Notify(
         val and "Auto Input Aktif" or "Auto Input Mati",
-        val and "Mengisi khusus slot kosong (0/12) dengan produk Makanan." or "Auto input dihentikan.",
+        val and "Mengangkut khusus produk Makanan (Default & Lisensi) ke slot kosong Rak1-Rak8." or "Auto input dihentikan.",
         3
     )
 end)
 
-API.Button(InputTab, "Isi Semua Slot Kosong Sekarang (1x)", function()
+API.Button(InputTab, "Isi Semua Slot Kosong Makanan Sekarang (1x)", function()
     task.spawn(function()
         local daftar = cariSemuaSlotKosong()
         if #daftar == 0 then
@@ -509,8 +656,9 @@ end)
 
 API.Button(InputTab, "Reset Cache & Refresh Daftar Makanan", function()
     rakDitolakServer = {}
-    muatWhitelistMakanan()
-    API.Notify("Diperbarui", "Whitelist Product.Makanan (" .. tostring(totalProdukTerdaftar) .. " produk) & cache rak direset.", 2)
+    kardusDitolakSementara = {}
+    muatDatabaseProduct()
+    API.Notify("Diperbarui", "Whitelist Default & Lisensi (" .. tostring(totalItemMakanan) .. " produk) diperbarui.", 2)
 end)
 
 -- ==========================================
@@ -520,14 +668,14 @@ task.spawn(function()
     while true do
         local slotKosong = cariSemuaSlotKosong()
         local kardusMakanan = ambilSemuaKardusMakanan()
-        local picked = cekKardusDiTangan()
+        local picked = cekKardusMakananDiTangan()
 
         API.SetElementText(
             StatusInputCard,
             "Slot Kosong (0/12): " .. tostring(#slotKosong) .. "  |  Kardus Makanan: " .. tostring(#kardusMakanan),
             autoPlaceRakEnabled
-                and (#slotKosong > 0 and "Status: Mengisi slot kosong Rak1-Rak8..." or "Status: Siaga (Tidak ada slot 0/12)")
-                or "Status: Nonaktif (Skip slot terisi sebagian)"
+                and (#slotKosong > 0 and "Status: Mengisi produk Makanan ke slot kosong..." or "Status: Siaga (Tidak ada slot 0/12)")
+                or "Status: Nonaktif (Filter: Product.Makanan)"
         )
 
         if autoPlaceRakEnabled and #slotKosong > 0 and (#kardusMakanan > 0 or picked ~= nil) then
