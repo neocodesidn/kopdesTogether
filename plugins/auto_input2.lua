@@ -302,7 +302,8 @@ local function ambilSemuaKardusMakanan()
 end
 
 -- ==========================================
--- PEMINDAIAN SLOT KOSONG MURNI (0/12) DI Rak1 - Rak8
+-- PEMINDAIAN SLOT KOSONG MURNI (0/12)
+-- RakBelanjaX / RakBelanjaHitamX (Rak1-Rak8) & RakKecilX (Rak1-Rak12)
 -- ==========================================
 local function dapatkanFolderItemPapan(rakPart)
     return rakPart:FindFirstChild("ClientItemInstances")
@@ -325,28 +326,41 @@ local function apakahSlotMurniKosong(rakPart)
     return true
 end
 
+local function dapatkanJumlahSlotModelRak(modelRak)
+    local namaLower = modelRak.Name:lower()
+    if namaLower:find("^rakkecil") then
+        return 12
+    elseif namaLower:find("^rakbelanja") then
+        return 8
+    end
+    return nil
+end
+
 local function cariSemuaSlotKosong()
     local daftarSlotKosong = {}
     local daftarModelRak = {}
 
     for _, modelRak in ipairs(clickObject:GetChildren()) do
-        local namaLower = modelRak.Name:lower()
-        if namaLower:find("rakbelanja") and modelRak:FindFirstChild("InputRak") then
-            table.insert(daftarModelRak, modelRak)
+        local jumlahSlot = dapatkanJumlahSlotModelRak(modelRak)
+        if jumlahSlot and modelRak:FindFirstChild("InputRak") then
+            table.insert(daftarModelRak, {
+                model = modelRak,
+                maxSlot = jumlahSlot
+            })
         end
     end
 
     table.sort(daftarModelRak, function(a, b)
-        local numA = tonumber(a.Name:match("%d+")) or 9999
-        local numB = tonumber(b.Name:match("%d+")) or 9999
+        local numA = tonumber(a.model.Name:match("%d+")) or 9999
+        local numB = tonumber(b.model.Name:match("%d+")) or 9999
         if numA ~= numB then return numA < numB end
-        return a.Name < b.Name
+        return a.model.Name < b.model.Name
     end)
 
-    for _, modelRak in ipairs(daftarModelRak) do
-        local inputRak = modelRak:FindFirstChild("InputRak")
+    for _, infoRak in ipairs(daftarModelRak) do
+        local inputRak = infoRak.model:FindFirstChild("InputRak")
         if inputRak then
-            for i = 1, 8 do
+            for i = 1, infoRak.maxSlot do
                 local slotPart = inputRak:FindFirstChild("Rak" .. tostring(i))
                 if slotPart and apakahSlotMurniKosong(slotPart) then
                     table.insert(daftarSlotKosong, slotPart)
@@ -532,7 +546,6 @@ local function ambilSatuKardusAman(detailKardus)
         return nil, nil
     end
 
-    -- Picu interaksi dari posisi karakter saat ini (tanpa teleport)
     picuInteraksiKardusJarakJauh(kardusObj)
 
     local picked = nil
@@ -541,7 +554,6 @@ local function ambilSatuKardusAman(detailKardus)
         picked = cariKardusPickedDiKarakter()
         if picked then break end
 
-        -- Fallback remote langsung bila ClickDetector/ProximityPrompt belum merespons
         if step == 8 and PickupKardusRemote and kardusObj.Parent then
             pcall(function() PickupKardusRemote:FireServer(kardusObj) end)
             pcall(function() PickupKardusRemote:FireServer(kardusObj, detailKardus.nama) end)
@@ -553,7 +565,6 @@ local function ambilSatuKardusAman(detailKardus)
         return nil, nil
     end
 
-    -- Tolak & jatuhkan hanya jika KardusPicked terbukti berisi kategori non-Makanan
     if apakahKardusMengandungNonMakanan(picked) then
         jatuhkanKardusSalah(picked)
         kardusDitolakSementara[kardusObj] = tick() + 10
@@ -668,7 +679,7 @@ API.Section(InputTab, "Informasi Filter & Target Rak (" .. PlotToko.Name .. ")")
 local StatusInputCard = API.Paragraph(
     InputTab,
     "Whitelist Ketat: Product.Makanan (" .. tostring(totalItemMakanan) .. " item)",
-    "Mengangkut kardus dari Default & Lisensi Product.Makanan jarak jauh (tanpa teleport) ke slot kosong (0/12) RakBelanjaX & RakBelanjaHitamX."
+    "Mengangkut kardus Product.Makanan ke slot kosong (0/12) RakBelanjaX, RakBelanjaHitamX (8 slot), & RakKecilX (12 slot)."
 )
 
 API.Section(InputTab, "Kontrol Auto Input Rak")
@@ -680,7 +691,7 @@ API.Toggle(InputTab, "Auto Isi Slot Kosong Makanan (Otomatis)", false, function(
     autoPlaceRakEnabled = val
     API.Notify(
         val and "Auto Input Aktif" or "Auto Input Mati",
-        val and "Mengangkut khusus produk Makanan dari posisi saat ini (tanpa teleport)." or "Auto input dihentikan.",
+        val and "Mengangkut khusus produk Makanan ke RakBelanja, RakBelanjaHitam, & RakKecil." or "Auto input dihentikan.",
         3
     )
 end)
@@ -695,7 +706,7 @@ API.Button(InputTab, "Isi Semua Slot Kosong Makanan Sekarang (1x)", function()
 
         local daftar = cariSemuaSlotKosong()
         if #daftar == 0 then
-            API.Notify("Tidak Ada Slot Kosong", "Semua papan Rak1 - Rak8 sudah terisi (tidak ada slot 0/12).", 3)
+            API.Notify("Tidak Ada Slot Kosong", "Semua papan RakBelanja & RakKecil sudah terisi.", 3)
             return
         end
         local hasil = jalankanSiklusIsiRak(true)
@@ -725,7 +736,7 @@ task.spawn(function()
         if pegangBarangLain then
             teksStatus = "Status: Tertahan (Tangan memegang barang non-Makanan)"
         elseif autoPlaceRakEnabled then
-            teksStatus = (#slotKosong > 0 and "Status: Mengisi produk Makanan jarak jauh..." or "Status: Siaga (Tidak ada slot 0/12)")
+            teksStatus = (#slotKosong > 0 and "Status: Mengisi produk Makanan ke slot kosong..." or "Status: Siaga (Tidak ada slot 0/12)")
         end
 
         API.SetElementText(
