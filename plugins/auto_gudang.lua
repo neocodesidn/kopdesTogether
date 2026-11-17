@@ -110,34 +110,31 @@ local function ambilSemuaKardusDiLantai()
 end
 
 -- ==========================================
--- PEMINDAIAN SLOT KOSONG DI RakPenyimpanan1 - RakPenyimpananX (Rak1 - Rak6)
+-- PEMINDAIAN SLOT KOSONG DI RakPenyimpananX (InputRak.Rak1..Rak6)
+-- Struktur terisi: RakX -> KardusX -> Kardus (Model)
 -- ==========================================
-local function apakahSlotGudangKosong(rakPart)
+local function apakahSlotGudangKosong(rakPart, slotIndex)
     if not rakPart or not rakPart:IsA("BasePart") then return false end
 
     if slotDitolakServer[rakPart] and tick() < slotDitolakServer[rakPart] then
         return false
     end
 
-    -- Cek apakah sudah ada kardus tersimpan di dalam slot Rak1..Rak6
-    if rakPart:GetAttribute("Occupied") == true
-        or rakPart:GetAttribute("IsOccupied") == true
-        or rakPart:GetAttribute("Terisi") == true
-        or rakPart:GetAttribute("HasKardus") == true then
-        return false
+    -- Cek model KardusX (misal Rak4 -> Kardus4)
+    local kardusContainer = rakPart:FindFirstChild("Kardus" .. tostring(slotIndex))
+        or rakPart:FindFirstChildWhichIsA("Model")
+
+    if kardusContainer then
+        -- Jika di dalam KardusX sudah ada Model "Kardus", berarti slot TERISI
+        local isiKardus = kardusContainer:FindFirstChild("Kardus")
+        if isiKardus then
+            return false
+        end
     end
 
-    for _, child in ipairs(rakPart:GetChildren()) do
-        local namaLower = child.Name:lower()
-        if namaLower:find("kardus") or namaLower:find("box") or child:IsA("Model") or child:IsA("BasePart") then
-            return false
-        end
-        if child:IsA("ObjectValue") and child.Value ~= nil then
-            return false
-        end
-        if child:IsA("BoolValue") and child.Value == true then
-            return false
-        end
+    -- Jika ada child langsung bernama "Kardus" di dalam RakX, berarti slot TERISI
+    if rakPart:FindFirstChild("Kardus") then
+        return false
     end
 
     return true
@@ -153,7 +150,7 @@ local function cariSemuaSlotGudangKosong()
         end
     end
 
-    -- Urutkan RakPenyimpanan1, RakPenyimpanan2, ..., RakPenyimpanan30
+    -- Urutkan RakPenyimpanan1, RakPenyimpanan2, dst.
     table.sort(daftarRakGudang, function(a, b)
         local numA = tonumber(a.Name:match("%d+")) or 9999
         local numB = tonumber(b.Name:match("%d+")) or 9999
@@ -166,8 +163,11 @@ local function cariSemuaSlotGudangKosong()
         if inputRak then
             for i = 1, MAX_SLOT_GUDANG do
                 local slotPart = inputRak:FindFirstChild("Rak" .. tostring(i))
-                if slotPart and apakahSlotGudangKosong(slotPart) then
-                    table.insert(daftarSlotKosong, slotPart)
+                if slotPart and apakahSlotGudangKosong(slotPart, i) then
+                    table.insert(daftarSlotKosong, {
+                        part = slotPart,
+                        index = i
+                    })
                 end
             end
         end
@@ -281,7 +281,9 @@ local function jalankanSiklusIsiGudang(abaikanToggle)
             local daftarSlotKosong = cariSemuaSlotGudangKosong()
             if #daftarSlotKosong == 0 then break end
 
-            local targetSlot = daftarSlotKosong[1]
+            local targetInfo = daftarSlotKosong[1]
+            local targetSlot = targetInfo.part
+            local slotIdx = targetInfo.index
             if not targetSlot or not targetSlot.Parent then break end
 
             local picked = cariKardusPickedDiKarakter()
@@ -298,13 +300,13 @@ local function jalankanSiklusIsiGudang(abaikanToggle)
 
             if not picked then break end
 
-            -- Langsung taruh kardus ke RakPenyimpananX.InputRak.Rak1..Rak6 (tanpa PlaceOilDone)
+            -- Langsung taruh kardus ke RakPenyimpananX.InputRak.Rak1..Rak6
             PlaceOilRemote:FireServer(targetSlot)
 
             local terkonfirmasi = false
             for _ = 1, 12 do
                 task.wait(0.10)
-                if not cariKardusPickedDiKarakter() or not apakahSlotGudangKosong(targetSlot) then
+                if not cariKardusPickedDiKarakter() or not apakahSlotGudangKosong(targetSlot, slotIdx) then
                     terkonfirmasi = true
                     break
                 end
