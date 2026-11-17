@@ -16,11 +16,12 @@ local CustomUI = loadstring(game:HttpGet(REPO_BASE .. "core/ui.lua?t=" .. tostri
 
 local DaftarPlugin = {
     { id = "restok",        name = "Auto Restok (Gudang-Safe)",     file = "auto_restok.lua" },
-    { id = "input",        name = "Auto Input (Universal Rak)",   file = "auto_input.lua" },
+    { id = "input",         name = "Auto Input (Universal Rak)",    file = "auto_input.lua" },
     --{ id = "shop_ops",      name = "Auto Kasir & Anti-Pencuri",     file = "shop_ops.lua" },
     --{ id = "sound_system",  name = "Sound System (Remote Speaker)", file = "sound_system.lua" },
     { id = "payroll",       name = "Auto Payroll & Deposit",        file = "auto_payroll.lua" },
     { id = "smart_payroll", name = "Smart Payroll (Profit Share)",  file = "smart_payroll.lua" },
+    { id = "auto_kasir",    name = "Auto Kasir (Turbo Scan)",       file = "auto_kasir.lua" },
     { id = "sewa_pekerja",  name = "Sewa Pekerja (NPC Staff)",      file = "sewa_pekerja.lua" },
     { id = "quest",         name = "Auto Claim Quest",              file = "auto_quest.lua" },
     { id = "webhook",       name = "Discord Webhook V2",            file = "discord_log.lua" },
