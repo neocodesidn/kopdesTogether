@@ -5,7 +5,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Hapus UI lama jika skrip dijalankan ulang
+-- Hapus UI lama jika loader dijalankan ulang
 local parentGui = (gethui and gethui()) or CoreGui
 local oldGui = parentGui:FindFirstChild("KopdesUI_Root")
 if oldGui then
@@ -112,8 +112,8 @@ makeDraggable(FloatBtn, FloatBtn)
 -- ==========================================
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainWindow"
-MainFrame.Size = UDim2.new(0, 430, 0, 300)
-MainFrame.Position = UDim2.new(0.5, -215, 0.5, -150)
+MainFrame.Size = UDim2.new(0, 440, 0, 305)
+MainFrame.Position = UDim2.new(0.5, -220, 0.5, -152)
 MainFrame.BackgroundColor3 = THEME.BgMain
 MainFrame.ClipsDescendants = true
 MainFrame.Visible = true
@@ -144,6 +144,7 @@ TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 13
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.TextTruncate = Enum.TextTruncate.AtEnd
+TitleLabel.ClipsDescendants = true
 TitleLabel.Parent = Header
 
 local CloseBtn = Instance.new("TextButton")
@@ -154,13 +155,14 @@ CloseBtn.Text = "✕"
 CloseBtn.TextColor3 = THEME.TextSecondary
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.TextSize = 12
+CloseBtn.ClipsDescendants = true
 CloseBtn.Parent = Header
 addCorner(CloseBtn, 6)
 CloseBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
 end)
 
--- Bar Tab (Scroll Horizontal + Anti Overflow)
+-- Bar Tab Horizontal (Otomatis Lebar Mengikuti Nama Tab)
 local TabBar = Instance.new("ScrollingFrame")
 TabBar.Name = "TabBar"
 TabBar.Size = UDim2.new(1, -20, 0, 30)
@@ -222,7 +224,8 @@ end
 
 function UI.CreateTab(name)
     local tabBtn = Instance.new("TextButton")
-    tabBtn.Size = UDim2.new(0, 84, 1, 0)
+    tabBtn.Size = UDim2.new(0, 0, 1, 0)
+    tabBtn.AutomaticSize = Enum.AutomaticSize.X
     tabBtn.BackgroundColor3 = THEME.BgCard
     tabBtn.Text = tostring(name)
     tabBtn.TextColor3 = THEME.TextSecondary
@@ -232,6 +235,11 @@ function UI.CreateTab(name)
     tabBtn.ClipsDescendants = true
     tabBtn.Parent = TabBar
     addCorner(tabBtn, 7)
+
+    local tabPad = Instance.new("UIPadding")
+    tabPad.PaddingLeft = UDim.new(0, 12)
+    tabPad.PaddingRight = UDim.new(0, 12)
+    tabPad.Parent = tabBtn
 
     local page = Instance.new("ScrollingFrame")
     page.Name = "Page_" .. tostring(name)
@@ -350,7 +358,7 @@ end
 -- ==========================================
 function UI.Input(tabPage, labelText, placeholder, defaultVal, suffix, callback, opts)
     opts = opts or {}
-    local numericOnly = opts.numericOnly ~= false -- default true untuk nominal/angka
+    local numericOnly = opts.numericOnly ~= false
     local allowDecimal = opts.allowDecimal == true
     local minVal = opts.min
     local maxVal = opts.max
@@ -363,9 +371,8 @@ function UI.Input(tabPage, labelText, placeholder, defaultVal, suffix, callback,
     addCorner(row, 8)
     addStroke(row, THEME.Stroke, 1)
 
-    -- Label kiri dibatasi lebarnya agar tidak bertabrakan dengan kotak input
     local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -154, 1, 0)
+    lbl.Size = UDim2.new(1, -158, 1, 0)
     lbl.Position = UDim2.new(0, 10, 0, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = tostring(labelText or "Input")
@@ -377,10 +384,9 @@ function UI.Input(tabPage, labelText, placeholder, defaultVal, suffix, callback,
     lbl.ClipsDescendants = true
     lbl.Parent = row
 
-    -- Kotak pembungkus input dengan ClipsDescendants agar teks panjang tidak keluar batas
     local boxWrapper = Instance.new("Frame")
-    boxWrapper.Size = UDim2.new(0, 134, 0, 26)
-    boxWrapper.Position = UDim2.new(1, -142, 0.5, -13)
+    boxWrapper.Size = UDim2.new(0, 138, 0, 26)
+    boxWrapper.Position = UDim2.new(1, -146, 0.5, -13)
     boxWrapper.BackgroundColor3 = THEME.BgInput
     boxWrapper.ClipsDescendants = true
     boxWrapper.Parent = row
@@ -431,7 +437,6 @@ function UI.Input(tabPage, labelText, placeholder, defaultVal, suffix, callback,
         if allowDecimal then
             str = str:gsub(",", "."):gsub("[^%d%.%-]", "")
         else
-            -- Hapus titik/koma pemisah ribuan (misal 50.000 -> 50000)
             str = str:gsub("[^%d%-]", "")
         end
         local num = tonumber(str)
@@ -473,8 +478,15 @@ function UI.Input(tabPage, labelText, placeholder, defaultVal, suffix, callback,
     }
 end
 
+-- Alias untuk plugin yang memanggil InputText (misal URL Webhook)
+function UI.InputText(tabPage, labelText, placeholder, defaultVal, callback)
+    return UI.Input(tabPage, labelText, placeholder, defaultVal, nil, callback, {
+        numericOnly = false
+    })
+end
+
 -- ==========================================
--- KONVERSI OTOMATIS: SEMUA API.Slider JADI INPUT NOMINAL
+-- KONVERSI OTOMATIS: SEMUA SLIDER JADI INPUT NOMINAL
 -- ==========================================
 function UI.Slider(tabPage, labelText, minVal, maxVal, stepVal, suffix, defaultVal, callback)
     local isDecimal = (typeof(stepVal) == "number" and stepVal < 1)
@@ -526,6 +538,7 @@ function UI.Toggle(tabPage, labelText, defaultVal, callback)
     pill.Size = UDim2.new(0, 40, 0, 20)
     pill.Position = UDim2.new(1, -50, 0.5, -10)
     pill.BackgroundColor3 = state and THEME.Success or THEME.BgInput
+    pill.ClipsDescendants = true
     pill.Parent = btn
     addCorner(pill, 10)
 
