@@ -38,35 +38,48 @@ local PlotToko = dapatkanPlotToko()
 local clickObject = PlotToko:WaitForChild("ClickObject")
 
 -- ==========================================
--- DAFTAR PRODUK MINUMAN DARI ReplicatedStorage.Product.Minuman (Lisensi_X)
+-- DAFTAR PRODUK MINUMAN & DAGING DARI ReplicatedStorage.Product
 -- ==========================================
 local daftarProdukMinuman = {}
+local daftarProdukDaging = {}
 
-local function muatDaftarMinuman()
-    daftarProdukMinuman = {}
+local function muatDaftarLisensi(namaKategori, tabelTujuan)
+    for k in pairs(tabelTujuan) do
+        tabelTujuan[k] = nil
+    end
+
     local folderProduct = ReplicatedStorage:FindFirstChild("Product")
-    local folderMinuman = folderProduct and folderProduct:FindFirstChild("Minuman")
-    if not folderMinuman then return end
+    local folderKategori = folderProduct and folderProduct:FindFirstChild(namaKategori)
+    if not folderKategori then return end
 
-    for _, lisensiFolder in ipairs(folderMinuman:GetChildren()) do
+    for _, lisensiFolder in ipairs(folderKategori:GetChildren()) do
         if lisensiFolder.Name:lower():find("^lisensi") then
             for _, item in ipairs(lisensiFolder:GetChildren()) do
-                daftarProdukMinuman[item.Name:lower()] = item.Name
+                tabelTujuan[item.Name:lower()] = item.Name
             end
         end
     end
 end
 
-muatDaftarMinuman()
+local function muatSemuaDaftarProduk()
+    muatDaftarLisensi("Minuman", daftarProdukMinuman)
+    muatDaftarLisensi("Daging", daftarProdukDaging)
+end
+
+muatSemuaDaftarProduk()
 
 -- ==========================================
--- KONFIGURASI AUTO KULKAS (8 SLOT: Rak1 - Rak8)
+-- KONFIGURASI AUTO KULKAS (MINUMAN & DAGING)
 -- ==========================================
-local MAX_SLOT_KULKAS = 8
+local MAX_SLOT_MINUMAN = 8 -- Kulkas1..KulkasX (Rak1 - Rak8)
+local MAX_SLOT_DAGING = 4  -- KulkasDaging1..KulkasDagingX (Rak1 - Rak4)
 local ITEMS_PER_SLOT = 12
-local autoKulkasEnabled = false
+
+local autoMinumanEnabled = false
+local autoDagingEnabled = false
 local jedaAntarSlot = 0.30
-local sedangMengisiKulkas = false
+local sedangMengisi = false
+
 local slotDitolakServer = {}
 local kardusDitolakSementara = {}
 local slotTerakhirDitembak = nil
@@ -82,7 +95,7 @@ if NotifikasiRemote and NotifikasiRemote:IsA("RemoteEvent") then
     NotifikasiRemote.OnClientEvent:Connect(function(pesan)
         if typeof(pesan) == "string" and slotTerakhirDitembak then
             local pLower = pesan:lower()
-            if pLower:find("sudah terisi") or pLower:find("penuh") or pLower:find("tidak sesuai") or pLower:find("hanya minuman") then
+            if pLower:find("sudah terisi") or pLower:find("penuh") or pLower:find("tidak sesuai") then
                 slotDitolakServer[slotTerakhirDitembak] = tick() + 60
             end
         end
@@ -90,7 +103,7 @@ if NotifikasiRemote and NotifikasiRemote:IsA("RemoteEvent") then
 end
 
 -- ==========================================
--- DETEKSI NAMA PRODUK & FILTER MINUMAN
+-- DETEKSI NAMA PRODUK & FILTER KATEGORI
 -- ==========================================
 local function deteksiNamaProdukKardus(objKardus)
     if not objKardus then return nil end
@@ -132,18 +145,20 @@ local function deteksiNamaProdukKardus(objKardus)
     return nil
 end
 
-local function apakahProdukMinuman(namaProduk)
+local function cekCocokKategori(namaProduk, kategori)
     if not namaProduk or namaProduk == "" then return false, nil end
-    if next(daftarProdukMinuman) == nil then
-        muatDaftarMinuman()
+
+    local tabelRef = (kategori == "Minuman") and daftarProdukMinuman or daftarProdukDaging
+    if next(tabelRef) == nil then
+        muatSemuaDaftarProduk()
     end
 
     local kunci = namaProduk:lower():gsub("%s+", "")
-    if daftarProdukMinuman[namaProduk:lower()] then
-        return true, daftarProdukMinuman[namaProduk:lower()]
+    if tabelRef[namaProduk:lower()] then
+        return true, tabelRef[namaProduk:lower()]
     end
 
-    for k, namaAsli in pairs(daftarProdukMinuman) do
+    for k, namaAsli in pairs(tabelRef) do
         if k:gsub("%s+", "") == kunci then
             return true, namaAsli
         end
@@ -152,15 +167,15 @@ local function apakahProdukMinuman(namaProduk)
     return false, nil
 end
 
-local function ambilDaftarKardusMinuman()
+local function ambilDaftarKardusKategori(kategori)
     local daftar = {}
     for _, v in ipairs(clickObject:GetChildren()) do
         if v.Name == "Kardus" then
             local skip = kardusDitolakSementara[v] and tick() < kardusDitolakSementara[v]
             if not skip then
                 local namaTerdeteksi = deteksiNamaProdukKardus(v)
-                local validMinuman, namaResmi = apakahProdukMinuman(namaTerdeteksi)
-                if validMinuman and namaResmi then
+                local valid, namaResmi = cekCocokKategori(namaTerdeteksi, kategori)
+                if valid and namaResmi then
                     table.insert(daftar, {
                         obj = v,
                         nama = namaResmi
@@ -173,9 +188,9 @@ local function ambilDaftarKardusMinuman()
 end
 
 -- ==========================================
--- PEMINDAIAN SLOT KULKAS KOSONG (Kulkas1, Kulkas2, dst. -> Rak1..Rak8)
+-- PEMINDAIAN SLOT KULKAS KOSONG
 -- ==========================================
-local function apakahSlotKulkasKosong(rakPart)
+local function apakahSlotKosong(rakPart)
     if not rakPart or not rakPart:IsA("BasePart") then return false end
 
     if slotDitolakServer[rakPart] and tick() < slotDitolakServer[rakPart] then
@@ -190,38 +205,39 @@ local function apakahSlotKulkasKosong(rakPart)
     return true
 end
 
-local function cariSemuaSlotKulkasKosong()
+local function cariSlotKosongKategori(kategori)
     local daftarSlotKosong = {}
-    local daftarKulkas = {}
+    local daftarModel = {}
+
+    local polaNama = (kategori == "Minuman") and "^kulkas%d+$" or "^kulkasdaging%d+$"
+    local maxSlot = (kategori == "Minuman") and MAX_SLOT_MINUMAN or MAX_SLOT_DAGING
 
     for _, model in ipairs(clickObject:GetChildren()) do
-        -- Wajib persis "Kulkas" diikuti angka (Kulkas1, Kulkas2, dst.)
-        -- KulkasDaging1 otomatis dilewati
-        if model.Name:lower():match("^kulkas%d+$") and model:FindFirstChild("InputRak") then
-            table.insert(daftarKulkas, model)
+        if model.Name:lower():match(polaNama) and model:FindFirstChild("InputRak") then
+            table.insert(daftarModel, model)
         end
     end
 
-    table.sort(daftarKulkas, function(a, b)
+    table.sort(daftarModel, function(a, b)
         local numA = tonumber(a.Name:match("%d+")) or 9999
         local numB = tonumber(b.Name:match("%d+")) or 9999
         if numA ~= numB then return numA < numB end
         return a.Name < b.Name
     end)
 
-    for _, modelKulkas in ipairs(daftarKulkas) do
-        local inputRak = modelKulkas:FindFirstChild("InputRak")
+    for _, model in ipairs(daftarModel) do
+        local inputRak = model:FindFirstChild("InputRak")
         if inputRak then
-            for i = 1, MAX_SLOT_KULKAS do
+            for i = 1, maxSlot do
                 local slotPart = inputRak:FindFirstChild("Rak" .. tostring(i))
-                if slotPart and apakahSlotKulkasKosong(slotPart) then
+                if slotPart and apakahSlotKosong(slotPart) then
                     table.insert(daftarSlotKosong, slotPart)
                 end
             end
         end
     end
 
-    return daftarSlotKosong, #daftarKulkas
+    return daftarSlotKosong, #daftarModel
 end
 
 -- ==========================================
@@ -291,11 +307,11 @@ local function picuInteraksiKardusJarakJauh(kardusObj)
     end
 end
 
-local function ambilSatuKardusMinuman(detailKardus)
+local function ambilSatuKardus(detailKardus, kategori)
     local existing = cariKardusPickedDiKarakter()
     if existing then
         local namaTangan = deteksiNamaProdukKardus(existing)
-        local valid, namaResmi = apakahProdukMinuman(namaTangan)
+        local valid, namaResmi = cekCocokKategori(namaTangan, kategori)
         if valid and namaResmi then
             if PickupKardusRemote then
                 pcall(function() PickupKardusRemote:FireServer(existing, namaResmi) end)
@@ -338,92 +354,98 @@ local function ambilSatuKardusMinuman(detailKardus)
 end
 
 -- ==========================================
--- EKSEKUSI UTAMA (3 TAHAP: Pickup -> PlaceOil -> PlaceOilDone)
+-- UPDATE UI STATUS & EKSEKUSI UTAMA
 -- ==========================================
 local StatusKulkasCard
 
 local function perbaruiStatusUI(teksStatus)
     if not StatusKulkasCard then return end
-    local slotKosong, totalKulkas = cariSemuaSlotKulkasKosong()
-    local kardusMinuman = ambilDaftarKardusMinuman()
+
+    local slotMinuman, totalMinuman = cariSlotKosongKategori("Minuman")
+    local kardusMinuman = ambilDaftarKardusKategori("Minuman")
+
+    local slotDaging, totalDaging = cariSlotKosongKategori("Daging")
+    local kardusDaging = ambilDaftarKardusKategori("Daging")
 
     API.SetElementText(
         StatusKulkasCard,
-        "Kulkas Minuman: " .. tostring(totalKulkas) .. " (" .. tostring(#slotKosong) .. " Slot Kosong)  |  Kardus Minuman: " .. tostring(#kardusMinuman),
-        "Status: " .. teksStatus
+        "Minuman: " .. tostring(#slotMinuman) .. " slot (" .. tostring(#kardusMinuman) .. " kardus)  |  Daging: " .. tostring(#slotDaging) .. " slot (" .. tostring(#kardusDaging) .. " kardus)",
+        "Unit Terdeteksi: " .. tostring(totalMinuman) .. " Kulkas, " .. tostring(totalDaging) .. " KulkasDaging  |  Status: " .. teksStatus
     )
 end
 
-local function jalankanSiklusIsiKulkas(sekaliJalan)
-    if sedangMengisiKulkas then return end
+local function prosesSatuKategori(kategori, wajibAktif)
+    local terisi = 0
+    while (wajibAktif or (kategori == "Minuman" and autoMinumanEnabled) or (kategori == "Daging" and autoDagingEnabled)) do
+        local daftarSlotKosong = cariSlotKosongKategori(kategori)
+        if #daftarSlotKosong == 0 then break end
+
+        local targetSlot = daftarSlotKosong[1]
+        if not targetSlot or not targetSlot.Parent then break end
+
+        local picked = cariKardusPickedDiKarakter()
+        local namaProduk = nil
+
+        if picked then
+            local namaTangan = deteksiNamaProdukKardus(picked)
+            local valid, namaResmi = cekCocokKategori(namaTangan, kategori)
+            if not valid then
+                -- Kardus di tangan milik kategori lain, lewati kategori ini dulu
+                break
+            end
+            namaProduk = namaResmi
+            pcall(function() PickupKardusRemote:FireServer(picked, namaProduk) end)
+            task.wait(0.06)
+        else
+            local daftarKardus = ambilDaftarKardusKategori(kategori)
+            if #daftarKardus == 0 then break end
+            picked, namaProduk = ambilSatuKardus(daftarKardus[1], kategori)
+        end
+
+        if not picked or not namaProduk then break end
+
+        perbaruiStatusUI("Mengisi " .. namaProduk .. " ke " .. targetSlot.Parent.Parent.Name .. "." .. targetSlot.Name)
+
+        slotTerakhirDitembak = targetSlot
+        PlaceOilRemote:FireServer(targetSlot)
+        task.wait(0.12)
+
+        local susunanCF = buatSusunanCFrameKulkas(targetSlot)
+        PlaceOilDoneRemote:FireServer(targetSlot, susunanCF, namaProduk)
+
+        local terkonfirmasi = false
+        for _ = 1, 14 do
+            task.wait(0.10)
+            if not cariKardusPickedDiKarakter() or not apakahSlotKosong(targetSlot) then
+                terkonfirmasi = true
+                break
+            end
+        end
+
+        if terkonfirmasi then
+            terisi = terisi + 1
+            task.wait(jedaAntarSlot)
+        else
+            slotDitolakServer[targetSlot] = tick() + 45
+        end
+    end
+    return terisi
+end
+
+local function jalankanSiklusKulkas(sekaliJalan)
+    if sedangMengisi then return end
     if not PickupKardusRemote or not PlaceOilRemote or not PlaceOilDoneRemote then return end
 
-    sedangMengisiKulkas = true
-    local slotTerisiCount = 0
+    sedangMengisi = true
 
     task.spawn(function()
+        local totalTerisi = 0
         local ok, err = pcall(function()
-            while sekaliJalan or autoKulkasEnabled do
-                local daftarSlotKosong = cariSemuaSlotKulkasKosong()
-                if #daftarSlotKosong == 0 then
-                    perbaruiStatusUI(autoKulkasEnabled and "Siaga (Semua slot kulkas penuh)" or "Nonaktif")
-                    break
-                end
-
-                local targetSlot = daftarSlotKosong[1]
-                if not targetSlot or not targetSlot.Parent then break end
-
-                local picked = cariKardusPickedDiKarakter()
-                local namaProduk = nil
-
-                if picked then
-                    local namaTangan = deteksiNamaProdukKardus(picked)
-                    local valid, namaResmi = apakahProdukMinuman(namaTangan)
-                    if not valid then
-                        perbaruiStatusUI("Menunggu (Kardus di tangan bukan minuman)")
-                        break
-                    end
-                    namaProduk = namaResmi
-                    pcall(function() PickupKardusRemote:FireServer(picked, namaProduk) end)
-                    task.wait(0.06)
-                else
-                    local daftarKardus = ambilDaftarKardusMinuman()
-                    if #daftarKardus == 0 then
-                        perbaruiStatusUI(autoKulkasEnabled and "Siaga (Menunggu kardus minuman...)" or "Nonaktif")
-                        break
-                    end
-                    picked, namaProduk = ambilSatuKardusMinuman(daftarKardus[1])
-                end
-
-                if not picked or not namaProduk then break end
-
-                perbaruiStatusUI("Mengisi " .. namaProduk .. " ke " .. targetSlot.Parent.Parent.Name .. "." .. targetSlot.Name)
-
-                -- Tahap 2: PlaceOil ke KulkasX.InputRak.Rak1..Rak8
-                slotTerakhirDitembak = targetSlot
-                PlaceOilRemote:FireServer(targetSlot)
-                task.wait(0.12)
-
-                -- Tahap 3: PlaceOilDone(targetSlot, tableCFrame, namaProduk)
-                local susunanCF = buatSusunanCFrameKulkas(targetSlot)
-                PlaceOilDoneRemote:FireServer(targetSlot, susunanCF, namaProduk)
-
-                local terkonfirmasi = false
-                for _ = 1, 14 do
-                    task.wait(0.10)
-                    if not cariKardusPickedDiKarakter() or not apakahSlotKulkasKosong(targetSlot) then
-                        terkonfirmasi = true
-                        break
-                    end
-                end
-
-                if terkonfirmasi then
-                    slotTerisiCount = slotTerisiCount + 1
-                    perbaruiStatusUI("Berhasil mengisi " .. namaProduk)
-                    task.wait(jedaAntarSlot)
-                else
-                    slotDitolakServer[targetSlot] = tick() + 45
-                end
+            if sekaliJalan or autoMinumanEnabled then
+                totalTerisi = totalTerisi + prosesSatuKategori("Minuman", sekaliJalan)
+            end
+            if sekaliJalan or autoDagingEnabled then
+                totalTerisi = totalTerisi + prosesSatuKategori("Daging", sekaliJalan)
             end
         end)
 
@@ -431,10 +453,12 @@ local function jalankanSiklusIsiKulkas(sekaliJalan)
             warn("[AutoKulkas Error]:", err)
         end
 
-        sedangMengisiKulkas = false
+        sedangMengisi = false
+        local adaYangAktif = autoMinumanEnabled or autoDagingEnabled
+        perbaruiStatusUI(adaYangAktif and "Siaga (Event-Driven Aktif)" or "Nonaktif")
+
         if sekaliJalan then
-            API.Notify("Selesai", "Berhasil mengisi " .. tostring(slotTerisiCount) .. " slot kulkas.", 3)
-            perbaruiStatusUI(autoKulkasEnabled and "Siaga" or "Nonaktif")
+            API.Notify("Selesai", "Berhasil mengisi " .. tostring(totalTerisi) .. " slot kulkas.", 3)
         end
     end)
 end
@@ -445,63 +469,89 @@ end
 clickObject.ChildAdded:Connect(function(child)
     if child.Name == "Kardus" then
         task.wait(0.25)
-        perbaruiStatusUI(autoKulkasEnabled and "Kardus baru terdeteksi..." or "Nonaktif")
-        if autoKulkasEnabled then
-            jalankanSiklusIsiKulkas(false)
+        local adaYangAktif = autoMinumanEnabled or autoDagingEnabled
+        perbaruiStatusUI(adaYangAktif and "Kardus baru terdeteksi..." or "Nonaktif")
+        if adaYangAktif then
+            jalankanSiklusKulkas(false)
         end
     end
 end)
 
 clickObject.ChildRemoved:Connect(function(child)
-    if child.Name == "Kardus" and not sedangMengisiKulkas then
-        perbaruiStatusUI(autoKulkasEnabled and "Siaga (Menunggu kardus minuman...)" or "Nonaktif")
+    if child.Name == "Kardus" and not sedangMengisi then
+        local adaYangAktif = autoMinumanEnabled or autoDagingEnabled
+        perbaruiStatusUI(adaYangAktif and "Siaga (Event-Driven Aktif)" or "Nonaktif")
     end
 end)
 
 -- ==========================================
--- UI TAB: KULKAS
+-- UI TAB: KULKAS (MINUMAN & DAGING)
 -- ==========================================
 local KulkasTab = API.CreateTab("Kulkas")
 
 API.Section(KulkasTab, "Status Kulkas (" .. PlotToko.Name .. ")")
 StatusKulkasCard = API.Paragraph(
     KulkasTab,
-    "Kulkas Minuman: -  |  Kardus Minuman: -",
+    "Minuman: -  |  Daging: -",
     "Status: Nonaktif"
 )
 
-API.Section(KulkasTab, "Kontrol Auto Kulkas")
+API.Section(KulkasTab, "Pengaturan Umum")
 API.Slider(KulkasTab, "Jeda Antar Slot (Detik)", 0.20, 1.50, 0.05, " dtk", 0.30, function(val)
     jedaAntarSlot = tonumber(val) or 0.30
 end)
 
-API.Toggle(KulkasTab, "Auto Isi Kulkas (Minuman)", false, function(val)
-    autoKulkasEnabled = val
+-- FITUR 1: KULKAS MINUMAN
+API.Section(KulkasTab, "Kulkas Minuman (8 Slot / Unit)")
+API.Toggle(KulkasTab, "Auto Isi Kulkas Minuman", false, function(val)
+    autoMinumanEnabled = val
     if val then
-        API.Notify("Auto Kulkas Aktif", "Memindai kardus Minuman (Lisensi_X) & mengisi Kulkas1..KulkasX.", 2)
-        jalankanSiklusIsiKulkas(false)
+        API.Notify("Kulkas Minuman Aktif", "Mengisi produk Minuman (Lisensi_X) ke Kulkas1..KulkasX.", 2)
+        jalankanSiklusKulkas(false)
     else
-        API.Notify("Auto Kulkas Mati", "Auto isi kulkas dihentikan.", 2)
-        perbaruiStatusUI("Nonaktif")
+        API.Notify("Kulkas Minuman Mati", "Auto isi kulkas minuman dihentikan.", 2)
+        perbaruiStatusUI(autoDagingEnabled and "Siaga (Event-Driven Aktif)" or "Nonaktif")
     end
 end)
 
 API.Paragraph(
     KulkasTab,
-    "Cara Kerja Auto Kulkas",
-    "Mengambil kardus yang terdaftar di ReplicatedStorage.Product.Minuman (Lisensi_X) dan menatanya ke slot kosong Rak1 - Rak8 khusus pada Kulkas1..KulkasX (melewati KulkasDagingX)."
+    "Penjelasan Kulkas Minuman",
+    "Memfilter kardus dari ReplicatedStorage.Product.Minuman (Lisensi_X) dan menatanya ke slot kosong Rak1 - Rak8 khusus pada Kulkas1..KulkasX."
 )
 
-API.Button(KulkasTab, "Isi Semua Kulkas Sekarang (1x)", function()
-    jalankanSiklusIsiKulkas(true)
+-- FITUR 2: KULKAS DAGING
+API.Section(KulkasTab, "Kulkas Daging (4 Slot / Unit)")
+API.Toggle(KulkasTab, "Auto Isi Kulkas Daging", false, function(val)
+    autoDagingEnabled = val
+    if val then
+        API.Notify("Kulkas Daging Aktif", "Mengisi produk Daging (Lisensi_X) ke KulkasDaging1..KulkasDagingX.", 2)
+        jalankanSiklusKulkas(false)
+    else
+        API.Notify("Kulkas Daging Mati", "Auto isi kulkas daging dihentikan.", 2)
+        perbaruiStatusUI(autoMinumanEnabled and "Siaga (Event-Driven Aktif)" or "Nonaktif")
+    end
 end)
 
-API.Button(KulkasTab, "Reset Cache & Refresh Lisensi Minuman", function()
+API.Paragraph(
+    KulkasTab,
+    "Penjelasan Kulkas Daging",
+    "Memfilter kardus dari ReplicatedStorage.Product.Daging (Lisensi_X) dan menatanya ke slot kosong Rak1 - Rak4 khusus pada KulkasDaging1..KulkasDagingX."
+)
+
+-- AKSI MANUAL & RESET
+API.Section(KulkasTab, "Aksi Manual")
+API.Button(KulkasTab, "Isi Semua Kulkas Minuman & Daging (1x)", function()
+    jalankanSiklusKulkas(true)
+end)
+
+API.Button(KulkasTab, "Reset Cache & Refresh Lisensi", function()
     slotDitolakServer = {}
     kardusDitolakSementara = {}
-    muatDaftarMinuman()
-    perbaruiStatusUI(autoKulkasEnabled and "Siaga" or "Nonaktif")
-    API.Notify("Direset", "Daftar Minuman (Lisensi_X) & cache slot kulkas diperbarui.", 2)
+    muatSemuaDaftarProduk()
+    local adaYangAktif = autoMinumanEnabled or autoDagingEnabled
+    perbaruiStatusUI(adaYangAktif and "Siaga (Event-Driven Aktif)" or "Nonaktif")
+    API.Notify("Direset", "Daftar Lisensi Minuman & Daging diperbarui.", 2)
 end)
 
 perbaruiStatusUI("Nonaktif")
