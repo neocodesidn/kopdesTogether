@@ -25,6 +25,7 @@ local DaftarPlugin = {
     --{ id = "auto_kasir",    name = "Auto Kasir (Turbo Scan)",       file = "auto_kasir.lua" },
     { id = "sewa_pekerja",  name = "Sewa Pekerja (NPC Staff)",      file = "sewa_pekerja.lua" },
     { id = "quest",         name = "Auto Claim Quest",              file = "auto_questV2.lua" },
+    { id = "boost_fps", name = "Boost FPS & Hide NPC", file = "boost_fps.lua" },
     { id = "webhook",       name = "Discord Webhook V2",            file = "discord_log.lua" },
 }
 
