@@ -24,7 +24,7 @@ local DaftarPlugin = {
     { id = "smart_payroll", name = "Smart Payroll (Profit Share)",  file = "smart_payroll.lua" },
     --{ id = "auto_kasir",    name = "Auto Kasir (Turbo Scan)",       file = "auto_kasir.lua" },
     { id = "sewa_pekerja",  name = "Sewa Pekerja (NPC Staff)",      file = "sewa_pekerja.lua" },
-    { id = "quest",         name = "Auto Claim Quest",              file = "auto_quest.lua" },
+    { id = "quest",         name = "Auto Claim Quest",              file = "auto_questV2.lua" },
     { id = "webhook",       name = "Discord Webhook V2",            file = "discord_log.lua" },
 }
 
