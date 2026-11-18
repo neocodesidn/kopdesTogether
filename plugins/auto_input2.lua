@@ -673,7 +673,7 @@ end
 -- ==========================================
 -- UI TAB: INPUT
 -- ==========================================
-local InputTab = API.CreateTab("Input")
+local InputTab = API.CreateTab("Rak Belanja")
 
 API.Section(InputTab, "Informasi Filter & Target Rak (" .. PlotToko.Name .. ")")
 local StatusInputCard = API.Paragraph(
@@ -690,8 +690,8 @@ end)
 API.Toggle(InputTab, "Auto Isi Slot Kosong Makanan (Otomatis)", false, function(val)
     autoPlaceRakEnabled = val
     API.Notify(
-        val and "Auto Input Aktif" or "Auto Input Mati",
-        val and "Mengangkut khusus produk Makanan ke RakBelanja, RakBelanjaHitam, & RakKecil." or "Auto input dihentikan.",
+        val and "Auto Restock Rak Belanja Aktif" or "Auto Restock Rak Belanja Mati",
+        val and "Mengangkut khusus produk Makanan ke Rak Belanja & Rak Kecil." or "Auto Restock Rak Belanja dihentikan.",
         3
     )
 end)
@@ -714,7 +714,7 @@ API.Button(InputTab, "Isi Semua Slot Kosong Makanan Sekarang (1x)", function()
     end)
 end)
 
-API.Button(InputTab, "Reset Cache & Refresh Daftar Makanan", function()
+API.Button(InputTab, "Refresh Daftar Makanan", function()
     rakDitolakServer = {}
     kardusDitolakSementara = {}
     instancePickedTerverifikasi = nil
