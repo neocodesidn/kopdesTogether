@@ -49,7 +49,6 @@ local function muatDaftarMinuman()
     if not folderMinuman then return end
 
     for _, lisensiFolder in ipairs(folderMinuman:GetChildren()) do
-        -- Filter khusus folder Lisensi_1, Lisensi_2, Lisensi_13, dst.
         if lisensiFolder.Name:lower():find("^lisensi") then
             for _, item in ipairs(lisensiFolder:GetChildren()) do
                 daftarProdukMinuman[item.Name:lower()] = item.Name
@@ -174,7 +173,7 @@ local function ambilDaftarKardusMinuman()
 end
 
 -- ==========================================
--- PEMINDAIAN SLOT KULKAS KOSONG (KulkasX -> InputRak -> Rak1..Rak8)
+-- PEMINDAIAN SLOT KULKAS KOSONG (Kulkas1, Kulkas2, dst. -> Rak1..Rak8)
 -- ==========================================
 local function apakahSlotKulkasKosong(rakPart)
     if not rakPart or not rakPart:IsA("BasePart") then return false end
@@ -196,7 +195,9 @@ local function cariSemuaSlotKulkasKosong()
     local daftarKulkas = {}
 
     for _, model in ipairs(clickObject:GetChildren()) do
-        if model.Name:lower():find("^kulkas") and model:FindFirstChild("InputRak") then
+        -- Wajib persis "Kulkas" diikuti angka (Kulkas1, Kulkas2, dst.)
+        -- KulkasDaging1 otomatis dilewati
+        if model.Name:lower():match("^kulkas%d+$") and model:FindFirstChild("InputRak") then
             table.insert(daftarKulkas, model)
         end
     end
@@ -231,7 +232,6 @@ local function buatSusunanCFrameKulkas(rakPart)
     local cfBase = rakPart.CFrame
     local sz = rakPart.Size
 
-    -- Susunan 4 kolom x 3 baris = 12 item di atas permukaan slot kulkas
     local cols = 4
     local rows = 3
     local tinggiY = (sz.Y * 0.5) + 0.35
@@ -349,7 +349,7 @@ local function perbaruiStatusUI(teksStatus)
 
     API.SetElementText(
         StatusKulkasCard,
-        "Kulkas: " .. tostring(totalKulkas) .. " (" .. tostring(#slotKosong) .. " Slot Kosong)  |  Kardus Minuman: " .. tostring(#kardusMinuman),
+        "Kulkas Minuman: " .. tostring(totalKulkas) .. " (" .. tostring(#slotKosong) .. " Slot Kosong)  |  Kardus Minuman: " .. tostring(#kardusMinuman),
         "Status: " .. teksStatus
     )
 end
@@ -466,7 +466,7 @@ local KulkasTab = API.CreateTab("Kulkas")
 API.Section(KulkasTab, "Status Kulkas (" .. PlotToko.Name .. ")")
 StatusKulkasCard = API.Paragraph(
     KulkasTab,
-    "Kulkas: -  |  Kardus Minuman: -",
+    "Kulkas Minuman: -  |  Kardus Minuman: -",
     "Status: Nonaktif"
 )
 
@@ -478,7 +478,7 @@ end)
 API.Toggle(KulkasTab, "Auto Isi Kulkas (Minuman)", false, function(val)
     autoKulkasEnabled = val
     if val then
-        API.Notify("Auto Kulkas Aktif", "Memindai kardus Minuman (Lisensi_X) & mengisi KulkasX.", 2)
+        API.Notify("Auto Kulkas Aktif", "Memindai kardus Minuman (Lisensi_X) & mengisi Kulkas1..KulkasX.", 2)
         jalankanSiklusIsiKulkas(false)
     else
         API.Notify("Auto Kulkas Mati", "Auto isi kulkas dihentikan.", 2)
@@ -489,7 +489,7 @@ end)
 API.Paragraph(
     KulkasTab,
     "Cara Kerja Auto Kulkas",
-    "Mengambil kardus yang terdaftar di ReplicatedStorage.Product.Minuman (Lisensi_X) dan menatanya ke slot kosong Rak1 - Rak8 pada seluruh KulkasX secara otomatis saat kardus baru muncul."
+    "Mengambil kardus yang terdaftar di ReplicatedStorage.Product.Minuman (Lisensi_X) dan menatanya ke slot kosong Rak1 - Rak8 khusus pada Kulkas1..KulkasX (melewati KulkasDagingX)."
 )
 
 API.Button(KulkasTab, "Isi Semua Kulkas Sekarang (1x)", function()
