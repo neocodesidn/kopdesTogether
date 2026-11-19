@@ -71,6 +71,14 @@ local function formatSectionTitle(value)
     return text
 end
 
+local function humanizeText(value)
+    local text = tostring(value)
+    text = text:gsub("_", " ")
+    text = text:gsub("(%l)(%u)", "%1 %2")
+    text = text:gsub("%s+", " ")
+    return text:gsub("^%s+", ""):gsub("%s+$", "")
+end
+
 local function resolveTabIcon(tabName, customIconId)
     if typeof(customIconId) == "number" and customIconId > 0 and customIconId ~= 4483362458 then
         return "rbxassetid://" .. tostring(customIconId)
@@ -704,7 +712,7 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
             tLbl.Size = UDim2.new(1, -30, 0, 16)
             tLbl.Position = UDim2.new(0, 30, 0, 0)
             tLbl.BackgroundTransparency = 1
-            tLbl.Text = tostring(title)
+            tLbl.Text = humanizeText(title)
             tLbl.TextColor3 = Theme.Ink
             tLbl.Font = Fonts.Black
             tLbl.TextSize = 12
@@ -717,7 +725,7 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
             cLbl.Position = UDim2.new(0, 30, 0, 18)
             cLbl.AutomaticSize = Enum.AutomaticSize.Y
             cLbl.BackgroundTransparency = 1
-            cLbl.Text = tostring(content)
+            cLbl.Text = humanizeText(content)
             cLbl.TextColor3 = Theme.TextMuted
             cLbl.Font = Fonts.Medium
             cLbl.TextSize = 11
@@ -886,7 +894,7 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         tLbl.Size = UDim2.new(1, -18, 0, 16)
         tLbl.Position = UDim2.new(0, 18, 0, 0)
         tLbl.BackgroundTransparency = 1
-        tLbl.Text = tostring(title)
+        tLbl.Text = humanizeText(title)
         tLbl.TextColor3 = Theme.Ink
         tLbl.Font = Fonts.Black
         tLbl.TextSize = 12
@@ -899,7 +907,7 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         cLbl.Position = UDim2.new(0, 0, 0, 20)
         cLbl.AutomaticSize = Enum.AutomaticSize.Y
         cLbl.BackgroundTransparency = 1
-        cLbl.Text = tostring(content)
+        cLbl.Text = humanizeText(content)
         cLbl.TextColor3 = Theme.TextMuted
         cLbl.Font = Fonts.Medium
         cLbl.TextSize = 11
@@ -911,8 +919,8 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
             _type = "Paragraph",
             Set = function(_, data)
                 if typeof(data) == "table" then
-                    if data.Title or data.title then tLbl.Text = tostring(data.Title or data.title) end
-                    if data.Content or data.content then cLbl.Text = tostring(data.Content or data.content) end
+                    if data.Title or data.title then tLbl.Text = humanizeText(tostring(data.Title or data.title)) end
+                    if data.Content or data.content then cLbl.Text = humanizeText(tostring(data.Content or data.content)) end
                 end
             end,
         }
