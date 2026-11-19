@@ -73,32 +73,51 @@ local function hitungSisaKardus()
     return jumlah
 end
 
--- UI Tab Shop
+-- ==========================================
+-- UI TAB: [AUTO BUY] KARDUS
+-- ==========================================
 local ShopTab = API.CreateTab("[AUTO BUY] Kardus")
+
 API.Section(ShopTab, "Pengaturan Produk")
 
-API.Input(ShopTab, "Nama Item (Tekan Enter)", "Bebelove", function(text)
+API.Input(ShopTab, "Nama Produk", "Bebelove", function(text)
     if text ~= "" then
         namaItem = text
-        API.Notify("Item Diatur", "Target produk: " .. namaItem, 2)
+        API.Notify("Produk Diatur", "Target belanja: " .. namaItem, 2)
     end
 end)
 
-API.Slider(ShopTab, "Jumlah Kardus Sekali Beli", 1, 50, 1, " Kardus", 10, function(val)
-    jumlahBeli = val
+API.Paragraph(
+    ShopTab,
+    "Cara Mengisi Nama Produk",
+    "Ketik nama produk sesuai nama di dalam game (contoh: Bebelove, SusuSapi, Paprika), lalu tekan Enter untuk menyimpan."
+)
+
+API.Slider(ShopTab, "Jumlah Sekali Beli (Max 10)", 1, 10, 1, " Kardus", 10, function(val)
+    jumlahBeli = math.clamp(math.floor(tonumber(val) or 10), 1, 10)
 end)
 
-API.Section(ShopTab, "Otomatisasi Restok")
-API.Toggle(ShopTab, "Auto Restok Kardus (Kecuali Rak Gudang)", false, function(val)
+API.Section(ShopTab, "Auto Beli Kardus")
+
+API.Toggle(ShopTab, "Aktifkan Auto Beli", false, function(val)
     autoRestokEnabled = val
     if val then sudahBeli = false end
     API.Notify(
-        val and "Auto Restok Aktif" or "Auto Restok Mati",
-        val and "Memantau kardus di luar Rak Gudang..." or "Auto beli dihentikan.",
-        3
+        val and "Auto Beli Aktif" or "Auto Beli Mati",
+        val and ("Siap membeli maksimal " .. jumlahBeli .. " kardus " .. namaItem .. " saat stok di lantai habis.") or "Auto beli kardus dihentikan.",
+        2
     )
 end)
 
+API.Paragraph(
+    ShopTab,
+    "Cara Kerja Auto Beli",
+    "Membeli maksimal 10 kardus secara otomatis begitu semua kardus di area toko habis (stok yang tersimpan di rak gudang tidak ikut dihitung)."
+)
+
+-- ==========================================
+-- LOGIKA PENGECEKAN STOK
+-- ==========================================
 task.spawn(function()
     while true do
         if autoRestokEnabled then
@@ -107,13 +126,14 @@ task.spawn(function()
                 sudahBeli = false
             elseif sisa == 0 and not sudahBeli then
                 sudahBeli = true
+                local jumlahKirim = math.clamp(jumlahBeli, 1, 10)
                 BeliProductRemote:FireServer({
                     {
-                        jumlahKardus = jumlahBeli,
+                        jumlahKardus = jumlahKirim,
                         itemName = namaItem
                     }
                 })
-                API.Notify("Restok Berhasil", "Membeli " .. jumlahBeli .. "x " .. namaItem, 3)
+                API.Notify("Belanja Berhasil", "Membeli " .. jumlahKirim .. " kardus " .. namaItem .. ".", 3)
             end
         end
         task.wait(1)
