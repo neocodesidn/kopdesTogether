@@ -74,7 +74,7 @@ local function hitungSisaKardus()
 end
 
 -- UI Tab Shop
-local ShopTab = API.CreateTab("Shop")
+local ShopTab = API.CreateTab("[AUTO BUY] Kardus")
 API.Section(ShopTab, "Pengaturan Produk")
 
 API.Input(ShopTab, "Nama Item (Tekan Enter)", "Bebelove", function(text)
