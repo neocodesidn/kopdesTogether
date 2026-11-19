@@ -62,20 +62,30 @@ local Icons = {
     Bell         = "rbxassetid://6022668888",
 }
 
+-- Bersihkan teks heading: trim whitespace & collapse spasi ganda, biarkan casing asli agar rapi.
+local function formatSectionTitle(value)
+    local text = tostring(value)
+    text = text:gsub("^%s+", "")
+    text = text:gsub("%s+$", "")
+    text = text:gsub("%s+", " ")
+    return text
+end
+
 local function resolveTabIcon(tabName, customIconId)
     if typeof(customIconId) == "number" and customIconId > 0 and customIconId ~= 4483362458 then
         return "rbxassetid://" .. tostring(customIconId)
     end
     local lower = tostring(tabName):lower()
     if lower:find("dash") or lower:find("home") then return Icons.Dashboard end
-    if lower:find("shop") or lower:find("restok") or lower:find("kardus") then return Icons.Shop end
-    if lower:find("operasional") or lower:find("ops") then return Icons.Operasional end
-    if lower:find("musik") or lower:find("sound") then return Icons.Musik end
-    if lower:find("smart") then return Icons.SmartPayroll end
-    if lower:find("bank") or lower:find("payroll") then return Icons.Bank end
-    if lower:find("sewa") or lower:find("pekerja") then return Icons.SewaPekerja end
-    if lower:find("quest") then return Icons.Quest end
-    if lower:find("webhook") or lower:find("discord") then return Icons.Webhook end
+    if lower:find("shop") or lower:find("restok") or lower:find("kardus") or lower:find("kulkas") or lower:find("sayuran") or lower:find("makanan") or lower:find("belanja") or lower:find("beli") or lower:find("restock") then return Icons.Shop end
+    if lower:find("operasional") or lower:find("ops") or lower:find("kasir") or lower:find("anti") or lower:find("pukul") or lower:find("store") then return Icons.Operasional end
+    if lower:find("musik") or lower:find("sound") or lower:find("audio") or lower:find("speaker") then return Icons.Musik end
+    if lower:find("smart") or lower:find("payroll") or lower:find("profit") or lower:find("gaji") then return Icons.SmartPayroll end
+    if lower:find("bank") or lower:find("transfer") or lower:find("deposit") or lower:find("dana") or lower:find("kredit") then return Icons.Bank end
+    if lower:find("sewa") or lower:find("pekerja") or lower:find("staff") or lower:find("kontrak") then return Icons.SewaPekerja end
+    if lower:find("quest") or lower:find("task") or lower:find("questv2") or lower:find("sidequest") then return Icons.Quest end
+    if lower:find("webhook") or lower:find("discord") or lower:find("notif") or lower:find("log") or lower:find("integrasi") then return Icons.Webhook end
+    if lower:find("boost") or lower:find("fps") or lower:find("performance") or lower:find("perf") then return Icons.Brand end
     return Icons.Brand
 end
 
@@ -845,7 +855,7 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         lbl.Size = UDim2.new(1, -14, 1, 0)
         lbl.Position = UDim2.new(0, 14, 0, 0)
         lbl.BackgroundTransparency = 1
-        lbl.Text = string.upper(tostring(title))
+        lbl.Text = formatSectionTitle(title)
         lbl.TextColor3 = Theme.Ink
         lbl.Font = Fonts.Black
         lbl.TextSize = 10
