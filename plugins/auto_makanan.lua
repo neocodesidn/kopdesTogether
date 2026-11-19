@@ -10,6 +10,9 @@ local DropObjectKardusRemote = KardusRemotes and KardusRemotes:FindFirstChild("D
 local PlaceOilRemote = KardusRemotes and KardusRemotes:FindFirstChild("PlaceOil")
 local PlaceOilDoneRemote = KardusRemotes and KardusRemotes:FindFirstChild("PlaceOilDone")
 
+local RemotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
+local NotifikasiRemote = RemotesFolder and RemotesFolder:FindFirstChild("Notifikasi")
+
 -- ==========================================
 -- DETEKSI OTOMATIS PLOT MILIK SENDIRI
 -- ==========================================
@@ -76,7 +79,6 @@ local function muatDatabaseProduct()
 
     if not ProductFolder then return end
 
-    -- 1. Daftarkan seluruh item di dalam ReplicatedStorage.Product.Makanan (Default & Lisensi)
     if MakananFolder then
         for _, subFolder in ipairs(MakananFolder:GetChildren()) do
             local subLower = subFolder.Name:lower()
@@ -107,7 +109,6 @@ local function muatDatabaseProduct()
         end
     end
 
-    -- 2. Daftarkan semua item di kategori lain (Minuman, Daging, Sayuran, dll.) ke blacklist
     for _, kategoriLain in ipairs(ProductFolder:GetChildren()) do
         if kategoriLain ~= MakananFolder then
             local kKat = normalisasiTeks(kategoriLain.Name)
@@ -157,8 +158,11 @@ local KAPASITAS_MAKS_PAPAN = 12
 local autoPlaceRakEnabled = false
 local jedaAntarRak = 0.25
 local sedangMengisiRak = false
+
 local rakDitolakServer = {}
 local kardusDitolakSementara = {}
+local slotTerakhirDitembak = nil
+local percobaanGagalTangan = 0
 
 local instancePickedTerverifikasi = nil
 local namaPickedTerverifikasi = nil
@@ -169,6 +173,17 @@ local kataGenerikObjek = {
     model = true, clickdetector = true, proximityprompt = true, surfacegui = true,
     billboardgui = true, weld = true, motor6d = true, attachment = true, decal = true, texture = true
 }
+
+if NotifikasiRemote and NotifikasiRemote:IsA("RemoteEvent") then
+    NotifikasiRemote.OnClientEvent:Connect(function(pesan)
+        if typeof(pesan) == "string" and slotTerakhirDitembak then
+            local pLower = pesan:lower()
+            if pLower:find("sudah terisi") or pLower:find("penuh") or pLower:find("tidak sesuai") then
+                rakDitolakServer[slotTerakhirDitembak] = tick() + 60
+            end
+        end
+    end)
+end
 
 -- ==========================================
 -- ANALISIS KETAT ISI KARDUS
@@ -448,7 +463,7 @@ local function buatBatchPenempatanRak(rakPart, itemName, jumlahItem)
 end
 
 -- ==========================================
--- PENGAMBILAN JARAK JAUH (TANPA TELEPORT) & VALIDASI TANGAN
+-- PENGAMBILAN JARAK JAUH & ANTI-STUCK TANGAN
 -- ==========================================
 local function jatuhkanKardusSalah(picked)
     if instancePickedTerverifikasi == picked then
@@ -456,11 +471,13 @@ local function jatuhkanKardusSalah(picked)
         namaPickedTerverifikasi = nil
     end
     if DropKardusRemote then
+        pcall(function() DropKardusRemote:FireServer() end)
         pcall(function() DropKardusRemote:FireServer(picked) end)
     end
     if DropObjectKardusRemote then
         pcall(function() DropObjectKardusRemote:FireServer(picked) end)
     end
+    percobaanGagalTangan = 0
 end
 
 local function cariKardusPickedDiKarakter()
@@ -579,6 +596,7 @@ local function ambilSatuKardusAman(detailKardus)
         return nil, nil
     end
 
+    percobaanGagalTangan = 0
     instancePickedTerverifikasi = picked
     namaPickedTerverifikasi = namaFinal
 
@@ -592,163 +610,209 @@ local function ambilSatuKardusAman(detailKardus)
 end
 
 -- ==========================================
--- EKSEKUSI UTAMA (HANYA MAKANAN -> SLOT KOSONG 0/12)
+-- UPDATE UI STATUS & EKSEKUSI EVENT-DRIVEN
 -- ==========================================
-local function jalankanSiklusIsiRak(abaikanToggle)
-    if sedangMengisiRak then return 0 end
-    if not PickupKardusRemote or not PlaceOilRemote or not PlaceOilDoneRemote then
-        return 0
-    end
+local StatusInputCard
 
-    sedangMengisiRak = true
-    local slotTerisiCount = 0
-    local jumlahItemTerakhir = KAPASITAS_MAKS_PAPAN
+local function perbaruiStatusUI(teksCustom)
+    if not StatusInputCard then return end
 
-    local ok, err = pcall(function()
-        while abaikanToggle or autoPlaceRakEnabled do
-            local daftarSlotKosong = cariSemuaSlotKosong()
-            if #daftarSlotKosong == 0 then break end
+    local slotKosong = cariSemuaSlotKosong()
+    local kardusMakanan = ambilSemuaKardusMakanan()
+    local _, _, pegangBarangLain = cekKardusMakananDiTangan()
 
-            local targetRak = daftarSlotKosong[1]
-            if not targetRak or not targetRak.Parent then break end
-
-            local picked, itemAktif, pegangBarangLain = cekKardusMakananDiTangan()
-            if pegangBarangLain then
-                break
-            end
-
-            local jumlahKirim = jumlahItemTerakhir
-
-            if not picked or not itemAktif then
-                local daftarKardus = ambilSemuaKardusMakanan()
-                if #daftarKardus == 0 then break end
-
-                local kardusPilihan = daftarKardus[1]
-                picked, itemAktif = ambilSatuKardusAman(kardusPilihan)
-                jumlahItemTerakhir = kardusPilihan.jumlah or KAPASITAS_MAKS_PAPAN
-                jumlahKirim = jumlahItemTerakhir
-            end
-
-            if not picked or not itemAktif or not cekProdukMakanan(itemAktif) then
-                break
-            end
-
-            PlaceOilRemote:FireServer(targetRak)
-            task.wait(0.08)
-
-            local batchData = buatBatchPenempatanRak(targetRak, itemAktif, jumlahKirim)
-            PlaceOilDoneRemote:FireServer(targetRak, batchData, itemAktif)
-
-            local terkonfirmasi = false
-            for _ = 1, 12 do
-                task.wait(0.10)
-                local folderItem = dapatkanFolderItemPapan(targetRak)
-                local masihDiTangan = cekKardusMakananDiTangan()
-                if (folderItem and #folderItem:GetChildren() > 0) or not masihDiTangan then
-                    terkonfirmasi = true
-                    break
-                end
-            end
-
-            if terkonfirmasi then
-                instancePickedTerverifikasi = nil
-                namaPickedTerverifikasi = nil
-                jumlahItemTerakhir = KAPASITAS_MAKS_PAPAN
-                slotTerisiCount = slotTerisiCount + 1
-                task.wait(jedaAntarRak)
-            else
-                rakDitolakServer[targetRak] = tick() + 60
-            end
-        end
-    end)
-
-    if not ok and err then
-        warn("[AutoInput Error]:", err)
-    end
-
-    sedangMengisiRak = false
-    return slotTerisiCount
-end
-
--- ==========================================
--- UI TAB: INPUT
--- ==========================================
-local InputTab = API.CreateTab("[RESTOCK] Makanan")
-
-API.Section(InputTab, "Informasi Filter & Target Rak (" .. PlotToko.Name .. ")")
-local StatusInputCard = API.Paragraph(
-    InputTab,
-    "Whitelist Ketat: Product.Makanan (" .. tostring(totalItemMakanan) .. " item)",
-    "Mengangkut kardus Product.Makanan ke slot kosong (0/12) RakBelanjaX, RakBelanjaHitamX (8 slot), & RakKecilX (12 slot)."
-)
-
-API.Section(InputTab, "Kontrol Auto Input Rak")
-API.Slider(InputTab, "Jeda Antar Slot Rak (Detik)", 0.20, 1.50, 0.05, " dtk", 0.25, function(val)
-    jedaAntarRak = tonumber(val) or 0.25
-end)
-
-API.Toggle(InputTab, "Auto Isi Slot Kosong Makanan (Otomatis)", false, function(val)
-    autoPlaceRakEnabled = val
-    API.Notify(
-        val and "Auto Restock Rak Belanja Aktif" or "Auto Restock Rak Belanja Mati",
-        val and "Mengangkut khusus produk Makanan ke Rak Belanja & Rak Kecil." or "Auto Restock Rak Belanja dihentikan.",
-        3
-    )
-end)
-
-API.Button(InputTab, "Isi Semua Slot Kosong Makanan Sekarang (1x)", function()
-    task.spawn(function()
-        local _, _, pegangBarangLain = cekKardusMakananDiTangan()
-        if pegangBarangLain then
-            API.Notify("Tangan Memegang Barang Lain", "Lepaskan kardus non-Makanan di tangan terlebih dahulu!", 3)
-            return
-        end
-
-        local daftar = cariSemuaSlotKosong()
-        if #daftar == 0 then
-            API.Notify("Tidak Ada Slot Kosong", "Semua papan RakBelanja & RakKecil sudah terisi.", 3)
-            return
-        end
-        local hasil = jalankanSiklusIsiRak(true)
-        API.Notify("Selesai", "Berhasil mengisi " .. tostring(hasil) .. " slot kosong dengan produk Makanan.", 3)
-    end)
-end)
-
-API.Button(InputTab, "Refresh Daftar Makanan", function()
-    rakDitolakServer = {}
-    kardusDitolakSementara = {}
-    instancePickedTerverifikasi = nil
-    namaPickedTerverifikasi = nil
-    muatDatabaseProduct()
-    API.Notify("Diperbarui", "Whitelist Default & Lisensi (" .. tostring(totalItemMakanan) .. " produk) & blacklist kulkas diperbarui.", 2)
-end)
-
--- ==========================================
--- LOOP PEMANTAUAN OTOMATIS
--- ==========================================
-task.spawn(function()
-    while true do
-        local slotKosong = cariSemuaSlotKosong()
-        local kardusMakanan = ambilSemuaKardusMakanan()
-        local picked, _, pegangBarangLain = cekKardusMakananDiTangan()
-
-        local teksStatus = "Status: Nonaktif (Filter: Product.Makanan)"
+    local teksStatus = teksCustom
+    if not teksStatus then
         if pegangBarangLain then
             teksStatus = "Status: Tertahan (Tangan memegang barang non-Makanan)"
         elseif autoPlaceRakEnabled then
-            teksStatus = (#slotKosong > 0 and "Status: Mengisi produk Makanan ke slot kosong..." or "Status: Siaga (Tidak ada slot 0/12)")
+            teksStatus = (#slotKosong > 0 and "Status: Siaga / Mengisi slot kosong..." or "Status: Siaga (Semua slot 0/12 penuh)")
+        else
+            teksStatus = "Status: Nonaktif (Database: " .. tostring(totalItemMakanan) .. " makanan)"
+        end
+    end
+
+    API.SetElementText(
+        StatusInputCard,
+        "Slot Kosong (0/12): " .. tostring(#slotKosong) .. "  |  Kardus Makanan: " .. tostring(#kardusMakanan),
+        teksStatus
+    )
+end
+
+local function jalankanSiklusIsiRak(abaikanToggle)
+    if sedangMengisiRak then return end
+    if not PickupKardusRemote or not PlaceOilRemote or not PlaceOilDoneRemote then return end
+
+    sedangMengisiRak = true
+
+    task.spawn(function()
+        local slotTerisiCount = 0
+        local jumlahItemTerakhir = KAPASITAS_MAKS_PAPAN
+
+        local ok, err = pcall(function()
+            while abaikanToggle or autoPlaceRakEnabled do
+                local daftarSlotKosong = cariSemuaSlotKosong()
+                if #daftarSlotKosong == 0 then
+                    local pickedSisa = cariKardusPickedDiKarakter()
+                    if pickedSisa and not apakahKardusMengandungNonMakanan(pickedSisa) then
+                        jatuhkanKardusSalah(pickedSisa)
+                    end
+                    break
+                end
+
+                local targetRak = daftarSlotKosong[1]
+                if not targetRak or not targetRak.Parent then break end
+
+                local picked, itemAktif, pegangBarangLain = cekKardusMakananDiTangan()
+                if pegangBarangLain then
+                    break
+                end
+
+                local jumlahKirim = jumlahItemTerakhir
+
+                if not picked or not itemAktif then
+                    local daftarKardus = ambilSemuaKardusMakanan()
+                    if #daftarKardus == 0 then break end
+
+                    local kardusPilihan = daftarKardus[1]
+                    picked, itemAktif = ambilSatuKardusAman(kardusPilihan)
+                    jumlahItemTerakhir = kardusPilihan.jumlah or KAPASITAS_MAKS_PAPAN
+                    jumlahKirim = jumlahItemTerakhir
+                end
+
+                if not picked or not itemAktif or not cekProdukMakanan(itemAktif) then
+                    break
+                end
+
+                perbaruiStatusUI("Status: Mengisi " .. itemAktif .. " ke " .. targetRak.Parent.Parent.Name .. "." .. targetRak.Name)
+
+                slotTerakhirDitembak = targetRak
+                PlaceOilRemote:FireServer(targetRak)
+                task.wait(0.08)
+
+                local batchData = buatBatchPenempatanRak(targetRak, itemAktif, jumlahKirim)
+                PlaceOilDoneRemote:FireServer(targetRak, batchData, itemAktif)
+
+                local terkonfirmasi = false
+                for _ = 1, 12 do
+                    task.wait(0.10)
+                    local folderItem = dapatkanFolderItemPapan(targetRak)
+                    local masihDiTangan = cekKardusMakananDiTangan()
+                    if (folderItem and #folderItem:GetChildren() > 0) or not masihDiTangan then
+                        terkonfirmasi = true
+                        break
+                    end
+                end
+
+                if terkonfirmasi then
+                    instancePickedTerverifikasi = nil
+                    namaPickedTerverifikasi = nil
+                    jumlahItemTerakhir = KAPASITAS_MAKS_PAPAN
+                    percobaanGagalTangan = 0
+                    slotTerisiCount = slotTerisiCount + 1
+                    task.wait(jedaAntarRak)
+                else
+                    rakDitolakServer[targetRak] = tick() + 60
+                    percobaanGagalTangan = percobaanGagalTangan + 1
+                    if percobaanGagalTangan >= 2 then
+                        jatuhkanKardusSalah(picked)
+                    end
+                end
+            end
+        end)
+
+        if not ok and err then
+            warn("[AutoMakanan Error]:", err)
         end
 
-        API.SetElementText(
-            StatusInputCard,
-            "Slot Kosong (0/12): " .. tostring(#slotKosong) .. "  |  Kardus Makanan: " .. tostring(#kardusMakanan),
-            teksStatus
-        )
+        sedangMengisiRak = false
+        perbaruiStatusUI()
 
-        if autoPlaceRakEnabled and not pegangBarangLain and #slotKosong > 0 and (#kardusMakanan > 0 or picked ~= nil) then
+        if abaikanToggle then
+            API.Notify("Selesai", "Berhasil mengisi " .. tostring(slotTerisiCount) .. " slot kosong dengan produk Makanan.", 3)
+        end
+    end)
+end
+
+-- ==========================================
+-- TRIGGER EVENT-DRIVEN (ANTI-LAG TANPA LOOPING)
+-- ==========================================
+clickObject.ChildAdded:Connect(function(child)
+    if child.Name == "Kardus" then
+        task.wait(0.25)
+        perbaruiStatusUI()
+        if autoPlaceRakEnabled then
             jalankanSiklusIsiRak(false)
         end
-
-        task.wait(0.8)
     end
 end)
+
+clickObject.ChildRemoved:Connect(function(child)
+    if child.Name == "Kardus" and not sedangMengisiRak then
+        perbaruiStatusUI()
+    end
+end)
+
+-- ==========================================
+-- UI TAB: [RESTOCK] MAKANAN
+-- ==========================================
+local InputTab = API.CreateTab("[RESTOCK] Makanan")
+
+API.Section(InputTab, "Status Rak Makanan (" .. PlotToko.Name .. ")")
+StatusInputCard = API.Paragraph(
+    InputTab,
+    "Slot Kosong (0/12): -  |  Kardus Makanan: -",
+    "Status: Nonaktif (Database: " .. tostring(totalItemMakanan) .. " makanan)"
+)
+
+API.Section(InputTab, "Pengaturan Kecepatan")
+API.Slider(InputTab, "Jeda Antar Slot (Detik)", 0.20, 1.50, 0.05, " dtk", 0.25, function(val)
+    jedaAntarRak = tonumber(val) or 0.25
+end)
+
+API.Section(InputTab, "Auto Isi Rak Makanan")
+API.Toggle(InputTab, "Aktifkan Auto Isi Makanan", false, function(val)
+    autoPlaceRakEnabled = val
+    perbaruiStatusUI()
+    if val then
+        API.Notify("Auto Makanan Aktif", "Mengisi produk Makanan ke slot kosong Rak Belanja & Rak Kecil.", 2)
+        jalankanSiklusIsiRak(false)
+    else
+        API.Notify("Auto Makanan Mati", "Auto isi rak makanan dihentikan.", 2)
+    end
+end)
+
+API.Paragraph(
+    InputTab,
+    "Cara Kerja Auto Makanan",
+    "Mengambil kardus khusus kategori Makanan (Default & Lisensi) dan menatanya ke slot kosong (0/12) pada RakBelanja, RakBelanjaHitam, dan RakKecil secara otomatis tanpa looping."
+)
+
+API.Section(InputTab, "Aksi Manual")
+API.Button(InputTab, "Isi Semua Slot Kosong Sekarang (1x)", function()
+    local _, _, pegangBarangLain = cekKardusMakananDiTangan()
+    if pegangBarangLain then
+        API.Notify("Tangan Memegang Barang Lain", "Lepaskan kardus non-Makanan di tangan terlebih dahulu!", 3)
+        return
+    end
+
+    local daftar = cariSemuaSlotKosong()
+    if #daftar == 0 then
+        API.Notify("Tidak Ada Slot Kosong", "Semua papan RakBelanja & RakKecil sudah terisi.", 3)
+        return
+    end
+    jalankanSiklusIsiRak(true)
+end)
+
+API.Button(InputTab, "Refresh Daftar Makanan & Reset Cache", function()
+    rakDitolakServer = {}
+    kardusDitolakSementara = {}
+    percobaanGagalTangan = 0
+    instancePickedTerverifikasi = nil
+    namaPickedTerverifikasi = nil
+    muatDatabaseProduct()
+    perbaruiStatusUI()
+    API.Notify("Diperbarui", "Whitelist Makanan (" .. tostring(totalItemMakanan) .. " produk) & cache slot diperbarui.", 2)
+end)
+
+perbaruiStatusUI()
