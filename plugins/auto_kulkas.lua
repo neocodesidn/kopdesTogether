@@ -584,7 +584,7 @@ end)
 -- ==========================================
 -- UI TAB: KULKAS (MINUMAN & DAGING)
 -- ==========================================
-local KulkasTab = API.CreateTab("Kulkas")
+local KulkasTab = API.CreateTab("[RESTOCK] Kulkas")
 
 API.Section(KulkasTab, "Status Kulkas (" .. PlotToko.Name .. ")")
 StatusKulkasCard = API.Paragraph(
