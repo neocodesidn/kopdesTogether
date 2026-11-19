@@ -76,7 +76,7 @@ function KopdesAPI.Emit(eventName, data)
     end
 end
 
--- Pasang Dark Blue Custom UI ke KopdesAPI
+-- Pasang Neo-Brutalism Custom UI ke KopdesAPI
 CustomUI.AttachToAPI(KopdesAPI, {
     Title = "Kopdes Together | v3.0",
     Subtitle = "Cheese Dev Modular Suite"

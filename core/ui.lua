@@ -1,47 +1,65 @@
--- core/ui.lua — Minimalist Dark Blue Responsive UI Engine (PC & Mobile)
+-- core/ui.lua — Neo-Brutalism Responsive UI Engine (PC & Mobile)
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
+local GuiService = game:GetService("GuiService")
 
 local CustomUI = {}
 
 -- ==========================================
--- PALET WARNA: MINIMALIST DARK BLUE
+-- TEMA NEO-BRUTALISM
 -- ==========================================
 local Theme = {
-    BgMain       = Color3.fromRGB(11, 17, 32),    -- #0B1120 Midnight Navy
-    BgSidebar    = Color3.fromRGB(15, 23, 42),    -- #0F172A Deep Slate Navy
-    BgCard       = Color3.fromRGB(23, 33, 56),    -- #172138 Elevated Card
-    BgCardHover  = Color3.fromRGB(29, 42, 70),    -- #1D2A46 Hover State
-    BgInput      = Color3.fromRGB(13, 20, 38),    -- #0D1426 Deep Input
-    Border       = Color3.fromRGB(38, 53, 84),    -- #263554 Subtle Stroke
-    BorderActive = Color3.fromRGB(59, 130, 246),  -- #3B82F6 Active Stroke
-    Accent       = Color3.fromRGB(59, 130, 246),  -- #3B82F6 Electric Blue
-    AccentSoft   = Color3.fromRGB(30, 58, 138),   -- #1E3A8A Soft Blue Tint
-    TextPrimary  = Color3.fromRGB(241, 245, 249), -- #F1F5F9 Crisp White
-    TextMuted    = Color3.fromRGB(148, 163, 184), -- #94A3B8 Slate Muted
-    Success      = Color3.fromRGB(16, 185, 129),  -- #10B981 Emerald
-    OffTrack     = Color3.fromRGB(51, 65, 85),    -- #334155 Switch Off
+    BgMain       = Color3.fromRGB(246, 241, 230),
+    BgSidebar    = Color3.fromRGB(255, 255, 255),
+    BgCard       = Color3.fromRGB(255, 255, 255),
+    BgCardHover  = Color3.fromRGB(255, 244, 189),
+    BgInput      = Color3.fromRGB(255, 253, 247),
+    Border       = Color3.fromRGB(17, 17, 17),
+    BorderActive = Color3.fromRGB(17, 17, 17),
+    Accent       = Color3.fromRGB(255, 210, 63),
+    AccentSoft   = Color3.fromRGB(255, 240, 179),
+    TextPrimary  = Color3.fromRGB(17, 17, 17),
+    TextMuted    = Color3.fromRGB(91, 85, 96),
+    Success      = Color3.fromRGB(6, 214, 160),
+    OffTrack     = Color3.fromRGB(227, 222, 211),
+    Ink          = Color3.fromRGB(17, 17, 17),
+    Paper        = Color3.fromRGB(255, 255, 255),
+    Pink         = Color3.fromRGB(255, 107, 157),
+    Blue         = Color3.fromRGB(77, 150, 255),
+    Green        = Color3.fromRGB(6, 214, 160),
+    Orange       = Color3.fromRGB(255, 159, 28),
+    Radius       = 2,
 }
 
+local Fonts = {
+    Black  = Enum.Font.GothamBlack,
+    Bold   = Enum.Font.GothamBold,
+    Medium = Enum.Font.GothamMedium,
+    Body   = Enum.Font.Gotham,
+}
+
+local SHADOW_OFFSET = 4
+local BORDER_WIDTH = 2
+
 -- ==========================================
--- DAFTAR VECTOR ICON (ROBLOX ASSET ID)
+-- IKON VEKTOR
 -- ==========================================
 local Icons = {
-    Brand        = "rbxassetid://6031280882", -- Layers / Grid
-    Dashboard    = "rbxassetid://6026568198", -- Home
-    Shop         = "rbxassetid://6034973115", -- Cart / Store
-    Operasional  = "rbxassetid://6031094678", -- Shield / Ops
-    Musik        = "rbxassetid://6034328955", -- Audio / Music
-    Bank         = "rbxassetid://6034684930", -- Wallet / Bank
-    SmartPayroll = "rbxassetid://6034287594", -- Analytics / Tuning
-    SewaPekerja  = "rbxassetid://6031265976", -- Users / Staff
-    Quest        = "rbxassetid://6031075938", -- Check Circle
-    Webhook      = "rbxassetid://6034509993", -- Send / Broadcast
-    ChevronDown  = "rbxassetid://6034818372", -- Dropdown Arrow
-    Minimize     = "rbxassetid://6035067836", -- Minus
-    Bell         = "rbxassetid://6022668888", -- Notification Info
+    Brand        = "rbxassetid://6031280882",
+    Dashboard    = "rbxassetid://6026568198",
+    Shop         = "rbxassetid://6034973115",
+    Operasional  = "rbxassetid://6031094678",
+    Musik        = "rbxassetid://6034328955",
+    Bank         = "rbxassetid://6034684930",
+    SmartPayroll = "rbxassetid://6034287594",
+    SewaPekerja  = "rbxassetid://6031265976",
+    Quest        = "rbxassetid://6031075938",
+    Webhook      = "rbxassetid://6034509993",
+    ChevronDown  = "rbxassetid://6034818372",
+    Minimize     = "rbxassetid://6035067836",
+    Bell         = "rbxassetid://6022668888",
 }
 
 local function resolveTabIcon(tabName, customIconId)
@@ -50,7 +68,7 @@ local function resolveTabIcon(tabName, customIconId)
     end
     local lower = tostring(tabName):lower()
     if lower:find("dash") or lower:find("home") then return Icons.Dashboard end
-    if lower:find("shop") or lower:find("restok") then return Icons.Shop end
+    if lower:find("shop") or lower:find("restok") or lower:find("kardus") then return Icons.Shop end
     if lower:find("operasional") or lower:find("ops") then return Icons.Operasional end
     if lower:find("musik") or lower:find("sound") then return Icons.Musik end
     if lower:find("smart") then return Icons.SmartPayroll end
@@ -62,24 +80,29 @@ local function resolveTabIcon(tabName, customIconId)
 end
 
 -- ==========================================
--- HELPER KOMPONEN & ANIMASI
+-- HELPER KOMPONEN, SHADOW & ANIMASI
 -- ==========================================
 local function tween(obj, props, dur)
-    TweenService:Create(obj, TweenInfo.new(dur or 0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
+    TweenService:Create(
+        obj,
+        TweenInfo.new(dur or 0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        props
+    ):Play()
 end
 
 local function addCorner(parent, radius)
     local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, radius or 8)
+    c.CornerRadius = UDim.new(0, radius or Theme.Radius)
     c.Parent = parent
     return c
 end
 
 local function addStroke(parent, thickness, color)
     local s = Instance.new("UIStroke")
-    s.Thickness = thickness or 1
-    s.Color = color or Theme.Border
+    s.Thickness = thickness or BORDER_WIDTH
+    s.Color = color or Theme.Ink
     s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.LineJoinMode = Enum.LineJoinMode.Miter
     s.Parent = parent
     return s
 end
@@ -94,13 +117,24 @@ local function addPadding(parent, top, right, bottom, left)
     return p
 end
 
-local function makeDraggable(dragHandle, targetFrame)
-    local dragging, dragStart, startPos
+local function getTopSafeInset()
+    local ok, topLeft = pcall(function()
+        return GuiService:GetGuiInset()
+    end)
+    local insetY = (ok and typeof(topLeft) == "Vector2") and topLeft.Y or 36
+    return math.max(insetY + 8, 44)
+end
+
+local function makeDraggable(dragHandle, targetFrame, onMove)
+    local dragging = false
+    local dragStart = nil
+    local startAbs = nil
+
     dragHandle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
-            startPos = targetFrame.Position
+            startAbs = targetFrame.AbsolutePosition
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -110,14 +144,86 @@ local function makeDraggable(dragHandle, targetFrame)
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            targetFrame.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
+        if not dragging then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
+        end
+
+        local delta = input.Position - dragStart
+        local cam = workspace.CurrentCamera
+        local vp = cam and cam.ViewportSize or Vector2.new(1024, 768)
+        local size = targetFrame.AbsoluteSize
+        local maxX = math.max(4, vp.X - size.X - 4)
+        local maxY = math.max(4, vp.Y - size.Y - 4)
+        local nx = math.clamp(startAbs.X + delta.X, 4, maxX)
+        local ny = math.clamp(startAbs.Y + delta.Y, 4, maxY)
+
+        targetFrame.Position = UDim2.fromOffset(math.floor(nx), math.floor(ny))
+        if onMove then
+            onMove(targetFrame.Position)
         end
     end)
+end
+
+-- Kartu neo-brutalism: border tebal + hard shadow hitam.
+local function newShadowed(parent, className, height, bgColor, autoHeight, baseZ)
+    local holder = Instance.new("Frame")
+    holder.Name = "BrutalHolder"
+    holder.BackgroundTransparency = 1
+    holder.BorderSizePixel = 0
+    holder.ClipsDescendants = false
+    holder.Size = UDim2.new(1, 0, 0, (height or 0) + SHADOW_OFFSET)
+    holder.Parent = parent
+
+    local shadow = Instance.new("Frame")
+    shadow.Name = "HardShadow"
+    shadow.BackgroundColor3 = Theme.Ink
+    shadow.BorderSizePixel = 0
+    shadow.Size = UDim2.new(1, -SHADOW_OFFSET, 0, height or 0)
+    shadow.Position = UDim2.new(0, SHADOW_OFFSET, 0, SHADOW_OFFSET)
+    shadow.ZIndex = baseZ or 1
+    shadow.Parent = holder
+    addCorner(shadow, Theme.Radius)
+
+    local card = Instance.new(className or "Frame")
+    card.Name = "Card"
+    card.BackgroundColor3 = bgColor or Theme.Paper
+    card.BorderSizePixel = 0
+    card.Size = UDim2.new(1, -SHADOW_OFFSET, 0, height or 0)
+    card.Position = UDim2.new(0, 0, 0, 0)
+    card.ZIndex = (baseZ or 1) + 1
+    card.ClipsDescendants = false
+    card.Parent = holder
+
+    if card:IsA("TextButton") then
+        card.AutoButtonColor = false
+        card.Text = ""
+    end
+
+    addCorner(card, Theme.Radius)
+    addStroke(card, BORDER_WIDTH, Theme.Ink)
+
+    local function syncSize(targetHeight)
+        local h = targetHeight or card.AbsoluteSize.Y
+        h = math.max(h or 0, 1)
+        if not autoHeight then
+            card.Size = UDim2.new(1, -SHADOW_OFFSET, 0, h)
+        end
+        shadow.Size = UDim2.new(1, -SHADOW_OFFSET, 0, h)
+        holder.Size = UDim2.new(1, 0, 0, h + SHADOW_OFFSET)
+    end
+
+    if autoHeight then
+        card.AutomaticSize = Enum.AutomaticSize.Y
+        card:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            syncSize(card.AbsoluteSize.Y)
+        end)
+        task.defer(function()
+            syncSize(card.AbsoluteSize.Y)
+        end)
+    end
+
+    return holder, card, shadow, syncSize
 end
 
 -- ==========================================
@@ -125,192 +231,412 @@ end
 -- ==========================================
 function CustomUI.AttachToAPI(KopdesAPI, config)
     config = config or {}
-    local guiParent = (gethui and gethui()) or CoreGui or Players.LocalPlayer:WaitForChild("PlayerGui")
 
-    local old = guiParent:FindFirstChild("KopdesDarkBlueSuite")
-    if old then old:Destroy() end
+    local PlayerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+    local guiParent = nil
+
+    if gethui then
+        local ok, hui = pcall(gethui)
+        if ok and hui then
+            guiParent = hui
+        end
+    end
+    if not guiParent then
+        guiParent = PlayerGui
+    end
+
+    local function destroyOldGui(parent)
+        if not parent then return end
+        for _, guiName in ipairs({ "KopdesNeoBrutalSuite", "KopdesDarkBlueSuite" }) do
+            local old = parent:FindFirstChild(guiName)
+            if old then old:Destroy() end
+        end
+    end
+    pcall(destroyOldGui, guiParent)
+    if guiParent ~= PlayerGui then pcall(destroyOldGui, PlayerGui) end
+    if guiParent ~= CoreGui then pcall(destroyOldGui, CoreGui) end
 
     local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "KopdesDarkBlueSuite"
+    ScreenGui.Name = "KopdesNeoBrutalSuite"
     ScreenGui.ResetOnSpawn = false
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ScreenGui.Parent = guiParent
+    ScreenGui.IgnoreGuiInset = true
+    ScreenGui.DisplayOrder = 999
+    local okParent = pcall(function()
+        ScreenGui.Parent = guiParent
+    end)
+    if not okParent then
+        ScreenGui.Parent = PlayerGui
+    end
 
     -- ==========================================
-    -- FLOATING PILL BUTTON (MINIMIZED MODE)
+    -- WINDOW UTAMA + HARD SHADOW
     -- ==========================================
-    local FloatBtn = Instance.new("TextButton")
-    FloatBtn.Name = "FloatingRestore"
-    FloatBtn.Size = UDim2.new(0, 128, 0, 36)
-    FloatBtn.Position = UDim2.new(0, 14, 0, 58)
-    FloatBtn.BackgroundColor3 = Theme.BgSidebar
-    FloatBtn.Text = ""
-    FloatBtn.Visible = false
-    FloatBtn.AutoButtonColor = false
-    FloatBtn.Parent = ScreenGui
-    addCorner(FloatBtn, 18)
-    addStroke(FloatBtn, 1.2, Theme.Accent)
-    makeDraggable(FloatBtn, FloatBtn)
+    local WindowShadow = Instance.new("Frame")
+    WindowShadow.Name = "WindowShadow"
+    WindowShadow.BackgroundColor3 = Theme.Ink
+    WindowShadow.BorderSizePixel = 0
+    WindowShadow.ZIndex = 9
+    WindowShadow.Parent = ScreenGui
+    addCorner(WindowShadow, Theme.Radius)
 
-    local FloatIcon = Instance.new("ImageLabel")
-    FloatIcon.Size = UDim2.new(0, 16, 0, 16)
-    FloatIcon.Position = UDim2.new(0, 12, 0.5, -8)
-    FloatIcon.BackgroundTransparency = 1
-    FloatIcon.Image = Icons.Brand
-    FloatIcon.ImageColor3 = Theme.Accent
-    FloatIcon.Parent = FloatBtn
-
-    local FloatText = Instance.new("TextLabel")
-    FloatText.Size = UDim2.new(1, -36, 1, 0)
-    FloatText.Position = UDim2.new(0, 34, 0, 0)
-    FloatText.BackgroundTransparency = 1
-    FloatText.Text = "Kopdes UI"
-    FloatText.TextColor3 = Theme.TextPrimary
-    FloatText.Font = Enum.Font.GothamBold
-    FloatText.TextSize = 12
-    FloatText.TextXAlignment = Enum.TextXAlignment.Left
-    FloatText.Parent = FloatBtn
-
-    -- ==========================================
-    -- WINDOW UTAMA (RESPONSIF PC & MOBILE)
-    -- ==========================================
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "MainWindow"
     MainFrame.BackgroundColor3 = Theme.BgMain
     MainFrame.ClipsDescendants = true
+    MainFrame.Size = UDim2.new(0, 620, 0, 460)
+    MainFrame.Position = UDim2.new(0.5, -310, 0.5, -230)
+    MainFrame.ZIndex = 10
     MainFrame.Parent = ScreenGui
-    addCorner(MainFrame, 10)
-    addStroke(MainFrame, 1, Theme.Border)
+    addCorner(MainFrame, Theme.Radius)
+    addStroke(MainFrame, 3, Theme.Ink)
 
-    -- Topbar
+    -- ==========================================
+    -- TOPBAR NEON YELLOW
+    -- ==========================================
     local Topbar = Instance.new("Frame")
-    Topbar.Size = UDim2.new(1, 0, 0, 42)
-    Topbar.BackgroundColor3 = Theme.BgSidebar
+    Topbar.Name = "Topbar"
+    Topbar.Size = UDim2.new(1, 0, 0, 54)
+    Topbar.BackgroundColor3 = Theme.Accent
     Topbar.BorderSizePixel = 0
+    Topbar.ZIndex = 3
     Topbar.Parent = MainFrame
-    makeDraggable(Topbar, MainFrame)
+    addCorner(Topbar, Theme.Radius)
 
     local TopLine = Instance.new("Frame")
-    TopLine.Size = UDim2.new(1, 0, 0, 1)
-    TopLine.Position = UDim2.new(0, 0, 1, -1)
-    TopLine.BackgroundColor3 = Theme.Border
+    TopLine.Name = "TopBorder"
+    TopLine.Size = UDim2.new(1, 0, 0, 3)
+    TopLine.Position = UDim2.new(0, 0, 1, -3)
+    TopLine.BackgroundColor3 = Theme.Ink
     TopLine.BorderSizePixel = 0
+    TopLine.ZIndex = 4
     TopLine.Parent = Topbar
 
     local BrandBadge = Instance.new("Frame")
-    BrandBadge.Size = UDim2.new(0, 26, 0, 26)
-    BrandBadge.Position = UDim2.new(0, 12, 0.5, -13)
-    BrandBadge.BackgroundColor3 = Theme.AccentSoft
+    BrandBadge.Name = "BrandBadge"
+    BrandBadge.Size = UDim2.new(0, 32, 0, 32)
+    BrandBadge.Position = UDim2.new(0, 14, 0.5, -16)
+    BrandBadge.BackgroundColor3 = Theme.Paper
+    BrandBadge.ZIndex = 5
     BrandBadge.Parent = Topbar
-    addCorner(BrandBadge, 6)
-    addStroke(BrandBadge, 1, Theme.Accent)
+    addCorner(BrandBadge, Theme.Radius)
+    addStroke(BrandBadge, BORDER_WIDTH, Theme.Ink)
 
     local BrandIcon = Instance.new("ImageLabel")
-    BrandIcon.Size = UDim2.new(0, 14, 0, 14)
-    BrandIcon.Position = UDim2.new(0.5, -7, 0.5, -7)
+    BrandIcon.Size = UDim2.new(0, 17, 0, 17)
+    BrandIcon.Position = UDim2.new(0.5, -8.5, 0.5, -8.5)
     BrandIcon.BackgroundTransparency = 1
     BrandIcon.Image = Icons.Brand
-    BrandIcon.ImageColor3 = Theme.TextPrimary
+    BrandIcon.ImageColor3 = Theme.Ink
+    BrandIcon.ZIndex = 6
     BrandIcon.Parent = BrandBadge
 
     local TitleLabel = Instance.new("TextLabel")
-    TitleLabel.Size = UDim2.new(1, -100, 0, 16)
-    TitleLabel.Position = UDim2.new(0, 46, 0, 6)
+    TitleLabel.Size = UDim2.new(1, -112, 0, 18)
+    TitleLabel.Position = UDim2.new(0, 56, 0, 8)
     TitleLabel.BackgroundTransparency = 1
     TitleLabel.Text = tostring(config.Title or "Kopdes Together")
-    TitleLabel.TextColor3 = Theme.TextPrimary
-    TitleLabel.Font = Enum.Font.GothamBold
-    TitleLabel.TextSize = 13
+    TitleLabel.TextColor3 = Theme.Ink
+    TitleLabel.Font = Fonts.Black
+    TitleLabel.TextSize = 14
     TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    TitleLabel.ZIndex = 5
     TitleLabel.Parent = Topbar
 
     local SubLabel = Instance.new("TextLabel")
-    SubLabel.Size = UDim2.new(1, -100, 0, 14)
-    SubLabel.Position = UDim2.new(0, 46, 0, 22)
+    SubLabel.Size = UDim2.new(1, -112, 0, 14)
+    SubLabel.Position = UDim2.new(0, 56, 0, 28)
     SubLabel.BackgroundTransparency = 1
     SubLabel.Text = tostring(config.Subtitle or "Cheese Dev Suite")
     SubLabel.TextColor3 = Theme.TextMuted
-    SubLabel.Font = Enum.Font.Gotham
-    SubLabel.TextSize = 10
+    SubLabel.Font = Fonts.Medium
+    SubLabel.TextSize = 9
     SubLabel.TextXAlignment = Enum.TextXAlignment.Left
+    SubLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    SubLabel.ZIndex = 5
     SubLabel.Parent = Topbar
 
     local MinBtn = Instance.new("TextButton")
-    MinBtn.Size = UDim2.new(0, 28, 0, 28)
-    MinBtn.Position = UDim2.new(1, -38, 0.5, -14)
-    MinBtn.BackgroundColor3 = Theme.BgCard
+    MinBtn.Name = "Minimize"
+    MinBtn.Size = UDim2.new(0, 34, 0, 34)
+    MinBtn.Position = UDim2.new(1, -48, 0.5, -17)
+    MinBtn.BackgroundColor3 = Theme.Pink
     MinBtn.Text = ""
     MinBtn.AutoButtonColor = false
+    MinBtn.ZIndex = 5
     MinBtn.Parent = Topbar
-    addCorner(MinBtn, 6)
-    addStroke(MinBtn, 1, Theme.Border)
+    addCorner(MinBtn, Theme.Radius)
+    addStroke(MinBtn, BORDER_WIDTH, Theme.Ink)
 
     local MinIcon = Instance.new("ImageLabel")
-    MinIcon.Size = UDim2.new(0, 14, 0, 14)
-    MinIcon.Position = UDim2.new(0.5, -7, 0.5, -7)
+    MinIcon.Size = UDim2.new(0, 15, 0, 15)
+    MinIcon.Position = UDim2.new(0.5, -7.5, 0.5, -7.5)
     MinIcon.BackgroundTransparency = 1
     MinIcon.Image = Icons.Minimize
-    MinIcon.ImageColor3 = Theme.TextMuted
+    MinIcon.ImageColor3 = Theme.Ink
+    MinIcon.ZIndex = 6
     MinIcon.Parent = MinBtn
 
-    MinBtn.MouseButton1Click:Connect(function()
-        MainFrame.Visible = false
-        FloatBtn.Visible = true
-    end)
+    -- ==========================================
+    -- MOBILE TAB BAR (HORIZONTAL)
+    -- ==========================================
+    local MobileBar = Instance.new("ScrollingFrame")
+    MobileBar.Name = "MobileTabs"
+    MobileBar.BackgroundColor3 = Theme.Paper
+    MobileBar.BorderSizePixel = 0
+    MobileBar.ScrollBarThickness = 0
+    MobileBar.ScrollingDirection = Enum.ScrollingDirection.X
+    MobileBar.AutomaticCanvasSize = Enum.AutomaticSize.X
+    MobileBar.CanvasSize = UDim2.new(0, 0, 0, 0)
+    MobileBar.Visible = false
+    MobileBar.ZIndex = 3
+    MobileBar.Parent = MainFrame
+    addPadding(MobileBar, 6, 8, 6, 8)
 
-    FloatBtn.MouseButton1Click:Connect(function()
-        FloatBtn.Visible = false
-        MainFrame.Visible = true
-    end)
+    local MobileLayout = Instance.new("UIListLayout")
+    MobileLayout.FillDirection = Enum.FillDirection.Horizontal
+    MobileLayout.Padding = UDim.new(0, 8)
+    MobileLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    MobileLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    MobileLayout.Parent = MobileBar
+
+    local MobileLine = Instance.new("Frame")
+    MobileLine.Name = "MobileBottomBorder"
+    MobileLine.BackgroundColor3 = Theme.Ink
+    MobileLine.BorderSizePixel = 0
+    MobileLine.Visible = false
+    MobileLine.ZIndex = 4
+    MobileLine.Parent = MainFrame
 
     -- ==========================================
-    -- SIDEBAR NAVIGASI & AREA KONTEN
+    -- SIDEBAR (PC)
     -- ==========================================
     local Sidebar = Instance.new("ScrollingFrame")
+    Sidebar.Name = "Sidebar"
     Sidebar.BackgroundColor3 = Theme.BgSidebar
     Sidebar.BorderSizePixel = 0
-    Sidebar.ScrollBarThickness = 2
-    Sidebar.ScrollBarImageColor3 = Theme.BorderActive
+    Sidebar.ScrollBarThickness = 3
+    Sidebar.ScrollBarImageColor3 = Theme.Ink
     Sidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y
     Sidebar.CanvasSize = UDim2.new(0, 0, 0, 0)
+    Sidebar.ZIndex = 2
     Sidebar.Parent = MainFrame
-    addPadding(Sidebar, 8, 8, 8, 8)
+    addPadding(Sidebar, 10, 8, 10, 8)
 
     local SideLayout = Instance.new("UIListLayout")
-    SideLayout.Padding = UDim.new(0, 5)
+    SideLayout.Padding = UDim.new(0, 8)
     SideLayout.SortOrder = Enum.SortOrder.LayoutOrder
     SideLayout.Parent = Sidebar
 
     local SideDivider = Instance.new("Frame")
-    SideDivider.BackgroundColor3 = Theme.Border
+    SideDivider.Name = "SidebarBorder"
+    SideDivider.BackgroundColor3 = Theme.Ink
     SideDivider.BorderSizePixel = 0
+    SideDivider.ZIndex = 3
     SideDivider.Parent = MainFrame
 
     local ContentHolder = Instance.new("Frame")
+    ContentHolder.Name = "ContentHolder"
     ContentHolder.BackgroundTransparency = 1
+    ContentHolder.ZIndex = 2
     ContentHolder.Parent = MainFrame
 
-    -- Fungsi Penyesuaian Responsif PC vs Ponsel
+    -- ==========================================
+    -- FLOATING RESTORE BUTTON
+    -- ==========================================
+    local FloatHolder = Instance.new("Frame")
+    FloatHolder.Name = "FloatingRestore"
+    FloatHolder.Size = UDim2.new(0, 150, 0, 46)
+    FloatHolder.Position = UDim2.new(0, 16, 0, 64)
+    FloatHolder.BackgroundTransparency = 1
+    FloatHolder.Visible = false
+    FloatHolder.ZIndex = 20
+    FloatHolder.Parent = ScreenGui
+
+    local FloatShadow = Instance.new("Frame")
+    FloatShadow.Size = UDim2.new(0, 142, 0, 42)
+    FloatShadow.Position = UDim2.new(0, SHADOW_OFFSET, 0, SHADOW_OFFSET)
+    FloatShadow.BackgroundColor3 = Theme.Ink
+    FloatShadow.BorderSizePixel = 0
+    FloatShadow.ZIndex = 21
+    FloatShadow.Parent = FloatHolder
+    addCorner(FloatShadow, Theme.Radius)
+
+    local FloatBtn = Instance.new("TextButton")
+    FloatBtn.Size = UDim2.new(0, 142, 0, 42)
+    FloatBtn.BackgroundColor3 = Theme.Accent
+    FloatBtn.Text = ""
+    FloatBtn.AutoButtonColor = false
+    FloatBtn.ZIndex = 22
+    FloatBtn.Parent = FloatHolder
+    addCorner(FloatBtn, Theme.Radius)
+    addStroke(FloatBtn, 3, Theme.Ink)
+
+    local FloatBadge = Instance.new("Frame")
+    FloatBadge.Size = UDim2.new(0, 24, 0, 24)
+    FloatBadge.Position = UDim2.new(0, 8, 0.5, -12)
+    FloatBadge.BackgroundColor3 = Theme.Pink
+    FloatBadge.ZIndex = 23
+    FloatBadge.Parent = FloatBtn
+    addCorner(FloatBadge, Theme.Radius)
+    addStroke(FloatBadge, BORDER_WIDTH, Theme.Ink)
+
+    local FloatIcon = Instance.new("ImageLabel")
+    FloatIcon.Size = UDim2.new(0, 14, 0, 14)
+    FloatIcon.Position = UDim2.new(0.5, -7, 0.5, -7)
+    FloatIcon.BackgroundTransparency = 1
+    FloatIcon.Image = Icons.Brand
+    FloatIcon.ImageColor3 = Theme.Ink
+    FloatIcon.ZIndex = 24
+    FloatIcon.Parent = FloatBadge
+
+    local FloatText = Instance.new("TextLabel")
+    FloatText.Size = UDim2.new(1, -42, 1, 0)
+    FloatText.Position = UDim2.new(0, 38, 0, 0)
+    FloatText.BackgroundTransparency = 1
+    FloatText.Text = "KOPDES UI"
+    FloatText.TextColor3 = Theme.Ink
+    FloatText.Font = Fonts.Black
+    FloatText.TextSize = 11
+    FloatText.TextXAlignment = Enum.TextXAlignment.Left
+    FloatText.ZIndex = 23
+    FloatText.Parent = FloatBtn
+
+    -- ==========================================
+    -- NOTIFIKASI TOAST
+    -- ==========================================
+    local NotifHolder = Instance.new("Frame")
+    NotifHolder.Name = "NotifHolder"
+    NotifHolder.BackgroundTransparency = 1
+    NotifHolder.Size = UDim2.new(0, 300, 1, -20)
+    NotifHolder.Position = UDim2.new(1, -312, 0, 10)
+    NotifHolder.ZIndex = 100
+    NotifHolder.Parent = ScreenGui
+
+    local NotifLayout = Instance.new("UIListLayout")
+    NotifLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    NotifLayout.Padding = UDim.new(0, 10)
+    NotifLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    NotifLayout.Parent = NotifHolder
+
+    local notifCounter = 0
+    local tabs = {}
+    local tabCounter = 0
+    local layoutCounters = setmetatable({}, { __mode = "k" })
+    local isMobileLayout = false
+    local firstTab = true
+
+    local function nextLayoutOrder(parent)
+        layoutCounters[parent] = (layoutCounters[parent] or 0) + 1
+        return layoutCounters[parent]
+    end
+
+    -- ==========================================
+    -- TAB VISUAL & RESPONSIVE LAYOUT
+    -- ==========================================
+    local function placeTab(item, mobile)
+        item.btn.LayoutOrder = item.order
+        if mobile then
+            item.btn.Parent = MobileBar
+            item.btn.Size = UDim2.new(0, math.clamp(56 + #tostring(item.name) * 7, 122, 200), 0, 34)
+        else
+            item.btn.Parent = Sidebar
+            item.btn.Size = UDim2.new(1, 0, 0, 40)
+        end
+        item.bar.Visible = item.active == true and not mobile
+    end
+
+    local function refreshTabVisuals()
+        for _, item in ipairs(tabs) do
+            local active = item.active == true
+            item.page.Visible = active
+            item.bar.Visible = active and not isMobileLayout
+            item.label.Font = active and Fonts.Black or Fonts.Medium
+
+            tween(item.btn, {
+                BackgroundColor3 = active and Theme.Accent or Theme.Paper,
+                BackgroundTransparency = 0,
+            }, 0.12)
+            tween(item.stroke, { Transparency = 0 }, 0.12)
+            tween(item.icon, {
+                ImageColor3 = active and Theme.Ink or Theme.TextMuted,
+            }, 0.12)
+            tween(item.label, {
+                TextColor3 = active and Theme.Ink or Theme.TextPrimary,
+            }, 0.12)
+        end
+    end
+
     local function applyResponsiveLayout()
         local cam = workspace.CurrentCamera
         local vp = cam and cam.ViewportSize or Vector2.new(1024, 768)
-        local isMobile = vp.X < 760
+        isMobileLayout = vp.X < 760
 
-        local winW = isMobile and math.clamp(vp.X - 32, 330, 480) or 560
-        local winH = isMobile and math.clamp(vp.Y - 40, 240, 315) or 370
-        local sideW = isMobile and 122 or 152
+        local topbarH = 54
+        local mobileBarH = 48
+        local topSafe = getTopSafeInset()
+        local availH = math.max(math.floor(vp.Y - topSafe), 240)
+        local winW, winH, sideW
+
+        if isMobileLayout then
+            winW = math.clamp(math.floor(vp.X - 20), 320, 540)
+            winH = math.clamp(availH - 20, 320, 780)
+            sideW = 0
+        else
+            winW = math.clamp(math.floor(vp.X - 160), 560, 720)
+            winH = math.clamp(availH - 100, 380, 560)
+            sideW = 176
+        end
+
+        winW = math.min(winW, math.max(320, vp.X - 12))
+        winH = math.min(winH, math.max(240, availH - 8))
+
+        local posX = math.floor((vp.X - winW) / 2)
+        local posY = topSafe + math.max(0, math.floor((availH - winH) / 2))
 
         MainFrame.Size = UDim2.new(0, winW, 0, winH)
-        MainFrame.Position = UDim2.new(0.5, -math.floor(winW / 2), 0.5, -math.floor(winH / 2))
+        MainFrame.Position = UDim2.new(0, posX, 0, posY)
+        WindowShadow.Size = MainFrame.Size
+        WindowShadow.Position = UDim2.new(0, posX + 8, 0, posY + 8)
+        WindowShadow.Visible = MainFrame.Visible
 
-        Sidebar.Size = UDim2.new(0, sideW, 1, -42)
-        Sidebar.Position = UDim2.new(0, 0, 0, 42)
+        Topbar.Size = UDim2.new(1, 0, 0, topbarH)
 
-        SideDivider.Size = UDim2.new(0, 1, 1, -42)
-        SideDivider.Position = UDim2.new(0, sideW, 0, 42)
+        Sidebar.Visible = not isMobileLayout
+        SideDivider.Visible = not isMobileLayout
+        MobileBar.Visible = isMobileLayout
+        MobileLine.Visible = isMobileLayout
 
-        ContentHolder.Size = UDim2.new(1, -(sideW + 1), 1, -42)
-        ContentHolder.Position = UDim2.new(0, sideW + 1, 0, 42)
+        Sidebar.Position = UDim2.new(0, 0, 0, topbarH)
+        Sidebar.Size = UDim2.new(0, sideW, 1, -topbarH)
+        SideDivider.Position = UDim2.new(0, sideW, 0, topbarH)
+        SideDivider.Size = UDim2.new(0, 3, 1, -topbarH)
+
+        MobileBar.Position = UDim2.new(0, 0, 0, topbarH)
+        MobileBar.Size = UDim2.new(1, 0, 0, mobileBarH)
+        MobileLine.Position = UDim2.new(0, 0, 0, topbarH + mobileBarH - 3)
+        MobileLine.Size = UDim2.new(1, 0, 0, 3)
+
+        if isMobileLayout then
+            ContentHolder.Position = UDim2.new(0, 0, 0, topbarH + mobileBarH)
+            ContentHolder.Size = UDim2.new(1, 0, 1, -(topbarH + mobileBarH))
+        else
+            ContentHolder.Position = UDim2.new(0, sideW + 3, 0, topbarH)
+            ContentHolder.Size = UDim2.new(1, -(sideW + 3), 1, -topbarH)
+        end
+
+        local notifW = isMobileLayout and math.clamp(math.floor(vp.X - 32), 240, 340) or 300
+        NotifHolder.Size = UDim2.new(0, notifW, 1, -20)
+        NotifHolder.Position = UDim2.new(1, -(notifW + 12), 0, 10)
+
+        for _, item in ipairs(tabs) do
+            placeTab(item, isMobileLayout)
+        end
+        refreshTabVisuals()
+
+        SubLabel.Visible = not (isMobileLayout and winW < 390)
+        TitleLabel.TextSize = isMobileLayout and 13 or 14
     end
 
     applyResponsiveLayout()
@@ -319,208 +645,253 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
     end
 
     -- ==========================================
-    -- NOTIFIKASI TOAST (DENGAN IKON VEKTOR)
+    -- WINDOW CONTROLS
     -- ==========================================
-    local NotifHolder = Instance.new("Frame")
-    NotifHolder.Size = UDim2.new(0, 260, 1, -20)
-    NotifHolder.Position = UDim2.new(1, -272, 0, 10)
-    NotifHolder.BackgroundTransparency = 1
-    NotifHolder.Parent = ScreenGui
+    MinBtn.MouseButton1Click:Connect(function()
+        MainFrame.Visible = false
+        WindowShadow.Visible = false
+        FloatHolder.Visible = true
+    end)
 
-    local NotifLayout = Instance.new("UIListLayout")
-    NotifLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-    NotifLayout.Padding = UDim.new(0, 8)
-    NotifLayout.Parent = NotifHolder
+    FloatBtn.MouseButton1Click:Connect(function()
+        FloatHolder.Visible = false
+        MainFrame.Visible = true
+        WindowShadow.Visible = true
+    end)
 
-    local tabs = {}
-    local firstTab = true
+    makeDraggable(FloatBtn, FloatHolder)
+    makeDraggable(Topbar, MainFrame, function(pos)
+        WindowShadow.Position = UDim2.new(pos.X.Scale, pos.X.Offset + 8, pos.Y.Scale, pos.Y.Offset + 8)
+    end)
 
+    -- ==========================================
+    -- NOTIFIKASI
+    -- ==========================================
     function KopdesAPI.Notify(title, content, duration)
         task.spawn(function()
-            local card = Instance.new("Frame")
-            card.Size = UDim2.new(1, 0, 0, 52)
-            card.AutomaticSize = Enum.AutomaticSize.Y
-            card.BackgroundColor3 = Theme.BgSidebar
-            card.Parent = NotifHolder
-            addCorner(card, 8)
-            addStroke(card, 1, Theme.Accent)
-            addPadding(card, 8, 10, 8, 10)
+            notifCounter = notifCounter + 1
+            local holder, card = newShadowed(NotifHolder, "Frame", 56, Theme.Paper, true, 100)
+            holder.LayoutOrder = notifCounter
+            addPadding(card, 10, 12, 10, 12)
+
+            local badge = Instance.new("Frame")
+            badge.Size = UDim2.new(0, 22, 0, 22)
+            badge.Position = UDim2.new(0, 0, 0, 0)
+            badge.BackgroundColor3 = Theme.Accent
+            badge.Parent = card
+            addCorner(badge, Theme.Radius)
+            addStroke(badge, BORDER_WIDTH, Theme.Ink)
 
             local icon = Instance.new("ImageLabel")
-            icon.Size = UDim2.new(0, 15, 0, 15)
-            icon.Position = UDim2.new(0, 0, 0, 1)
+            icon.Size = UDim2.new(0, 13, 0, 13)
+            icon.Position = UDim2.new(0.5, -6.5, 0.5, -6.5)
             icon.BackgroundTransparency = 1
             icon.Image = Icons.Bell
-            icon.ImageColor3 = Theme.Accent
-            icon.Parent = card
+            icon.ImageColor3 = Theme.Ink
+            icon.Parent = badge
 
             local tLbl = Instance.new("TextLabel")
-            tLbl.Size = UDim2.new(1, -22, 0, 16)
-            tLbl.Position = UDim2.new(0, 22, 0, 0)
+            tLbl.Size = UDim2.new(1, -30, 0, 16)
+            tLbl.Position = UDim2.new(0, 30, 0, 0)
             tLbl.BackgroundTransparency = 1
             tLbl.Text = tostring(title)
-            tLbl.TextColor3 = Theme.TextPrimary
-            tLbl.Font = Enum.Font.GothamBold
+            tLbl.TextColor3 = Theme.Ink
+            tLbl.Font = Fonts.Black
             tLbl.TextSize = 12
             tLbl.TextXAlignment = Enum.TextXAlignment.Left
+            tLbl.TextTruncate = Enum.TextTruncate.AtEnd
             tLbl.Parent = card
 
             local cLbl = Instance.new("TextLabel")
-            cLbl.Size = UDim2.new(1, -22, 0, 0)
-            cLbl.Position = UDim2.new(0, 22, 0, 18)
+            cLbl.Size = UDim2.new(1, -30, 0, 0)
+            cLbl.Position = UDim2.new(0, 30, 0, 18)
             cLbl.AutomaticSize = Enum.AutomaticSize.Y
             cLbl.BackgroundTransparency = 1
             cLbl.Text = tostring(content)
             cLbl.TextColor3 = Theme.TextMuted
-            cLbl.Font = Enum.Font.Gotham
+            cLbl.Font = Fonts.Medium
             cLbl.TextSize = 11
             cLbl.TextWrapped = true
             cLbl.TextXAlignment = Enum.TextXAlignment.Left
             cLbl.Parent = card
 
             task.wait(duration or 3)
-            if card and card.Parent then
-                card:Destroy()
+            if holder.Parent then
+                holder:Destroy()
             end
         end)
     end
 
     -- ==========================================
-    -- TAB & IKON SIDEBAR
+    -- TAB CREATION
     -- ==========================================
     function KopdesAPI.CreateTab(name, iconId)
         local isInitial = firstTab
         firstTab = false
+        tabCounter = tabCounter + 1
 
         local tabBtn = Instance.new("TextButton")
-        tabBtn.Size = UDim2.new(1, 0, 0, 32)
-        tabBtn.BackgroundColor3 = isInitial and Theme.BgCard or Theme.BgSidebar
-        tabBtn.BackgroundTransparency = isInitial and 0 or 1
+        tabBtn.Name = "TabButton"
+        tabBtn.Size = UDim2.new(1, 0, 0, 40)
+        tabBtn.BackgroundColor3 = isInitial and Theme.Accent or Theme.Paper
+        tabBtn.BackgroundTransparency = 0
         tabBtn.Text = ""
         tabBtn.AutoButtonColor = false
+        tabBtn.ClipsDescendants = true
+        tabBtn.ZIndex = 5
         tabBtn.Parent = Sidebar
-        addCorner(tabBtn, 6)
+        addCorner(tabBtn, Theme.Radius)
+        local tabStroke = addStroke(tabBtn, BORDER_WIDTH, Theme.Ink)
+        tabStroke.Transparency = 0
 
         local activeBar = Instance.new("Frame")
-        activeBar.Size = UDim2.new(0, 3, 0, 16)
-        activeBar.Position = UDim2.new(0, 2, 0.5, -8)
-        activeBar.BackgroundColor3 = Theme.Accent
+        activeBar.Size = UDim2.new(0, 4, 0, 18)
+        activeBar.Position = UDim2.new(0, 0, 0.5, -9)
+        activeBar.BackgroundColor3 = Theme.Ink
         activeBar.BorderSizePixel = 0
         activeBar.Visible = isInitial
+        activeBar.ZIndex = 6
         activeBar.Parent = tabBtn
-        addCorner(activeBar, 2)
+        addCorner(activeBar, 1)
 
         local tabIcon = Instance.new("ImageLabel")
-        tabIcon.Size = UDim2.new(0, 14, 0, 14)
-        tabIcon.Position = UDim2.new(0, 10, 0.5, -7)
+        tabIcon.Size = UDim2.new(0, 15, 0, 15)
+        tabIcon.Position = UDim2.new(0, 12, 0.5, -7.5)
         tabIcon.BackgroundTransparency = 1
         tabIcon.Image = resolveTabIcon(name, iconId)
-        tabIcon.ImageColor3 = isInitial and Theme.Accent or Theme.TextMuted
+        tabIcon.ImageColor3 = isInitial and Theme.Ink or Theme.TextMuted
+        tabIcon.ZIndex = 6
         tabIcon.Parent = tabBtn
 
         local tabText = Instance.new("TextLabel")
-        tabText.Size = UDim2.new(1, -32, 1, 0)
-        tabText.Position = UDim2.new(0, 30, 0, 0)
+        tabText.Size = UDim2.new(1, -40, 1, 0)
+        tabText.Position = UDim2.new(0, 36, 0, 0)
         tabText.BackgroundTransparency = 1
         tabText.Text = tostring(name)
-        tabText.TextColor3 = isInitial and Theme.TextPrimary or Theme.TextMuted
-        tabText.Font = isInitial and Enum.Font.GothamBold or Enum.Font.GothamMedium
-        tabText.TextSize = 11
+        tabText.TextColor3 = isInitial and Theme.Ink or Theme.TextPrimary
+        tabText.Font = isInitial and Fonts.Black or Fonts.Medium
+        tabText.TextSize = 10
         tabText.TextXAlignment = Enum.TextXAlignment.Left
         tabText.TextTruncate = Enum.TextTruncate.AtEnd
+        tabText.ZIndex = 6
         tabText.Parent = tabBtn
 
         local page = Instance.new("ScrollingFrame")
+        page.Name = "Page"
         page.Size = UDim2.new(1, 0, 1, 0)
         page.BackgroundTransparency = 1
         page.BorderSizePixel = 0
-        page.ScrollBarThickness = 2
-        page.ScrollBarImageColor3 = Theme.BorderActive
+        page.ScrollBarThickness = 3
+        page.ScrollBarImageColor3 = Theme.Ink
+        page.ScrollingDirection = Enum.ScrollingDirection.Y
         page.AutomaticCanvasSize = Enum.AutomaticSize.Y
         page.CanvasSize = UDim2.new(0, 0, 0, 0)
         page.Visible = isInitial
+        page.ZIndex = 2
         page.Parent = ContentHolder
-        addPadding(page, 10, 12, 14, 10)
+        addPadding(page, 12, 16, 22, 12)
 
         local pageLayout = Instance.new("UIListLayout")
-        pageLayout.Padding = UDim.new(0, 7)
+        pageLayout.Padding = UDim.new(0, 10)
         pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
         pageLayout.Parent = page
 
-        table.insert(tabs, {
+        local item = {
             btn = tabBtn,
             bar = activeBar,
             icon = tabIcon,
             label = tabText,
-            page = page
-        })
+            stroke = tabStroke,
+            page = page,
+            name = tostring(name),
+            order = tabCounter,
+            active = isInitial,
+        }
+        table.insert(tabs, item)
 
         tabBtn.MouseButton1Click:Connect(function()
-            for _, item in ipairs(tabs) do
-                local active = (item.page == page)
-                item.page.Visible = active
-                item.bar.Visible = active
-                item.label.Font = active and Enum.Font.GothamBold or Enum.Font.GothamMedium
-                tween(item.btn, {
-                    BackgroundColor3 = active and Theme.BgCard or Theme.BgSidebar,
-                    BackgroundTransparency = active and 0 or 1
-                }, 0.14)
-                tween(item.icon, {
-                    ImageColor3 = active and Theme.Accent or Theme.TextMuted
-                }, 0.14)
-                tween(item.label, {
-                    TextColor3 = active and Theme.TextPrimary or Theme.TextMuted
-                }, 0.14)
+            for _, other in ipairs(tabs) do
+                other.active = (other == item)
             end
+            refreshTabVisuals()
         end)
 
+        placeTab(item, isMobileLayout)
+        refreshTabVisuals()
         return page
     end
 
     -- ==========================================
-    -- KOMPONEN UI (SECTION, PARAGRAPH, BUTTON, TOGGLE, SLIDER, DROPDOWN, INPUT)
+    -- SECTION
     -- ==========================================
     function KopdesAPI.Section(tab, title)
+        local row = Instance.new("Frame")
+        row.Name = "Section"
+        row.Size = UDim2.new(1, 0, 0, 24)
+        row.BackgroundTransparency = 1
+        row.LayoutOrder = nextLayoutOrder(tab)
+        row.Parent = tab
+
+        local block = Instance.new("Frame")
+        block.Size = UDim2.new(0, 6, 0, 16)
+        block.Position = UDim2.new(0, 0, 0, 4)
+        block.BackgroundColor3 = Theme.Blue
+        block.BorderSizePixel = 0
+        block.Parent = row
+        addCorner(block, 1)
+        addStroke(block, BORDER_WIDTH, Theme.Ink)
+
         local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, 0, 0, 18)
+        lbl.Size = UDim2.new(1, -14, 1, 0)
+        lbl.Position = UDim2.new(0, 14, 0, 0)
         lbl.BackgroundTransparency = 1
         lbl.Text = string.upper(tostring(title))
-        lbl.TextColor3 = Theme.Accent
-        lbl.Font = Enum.Font.GothamBold
+        lbl.TextColor3 = Theme.Ink
+        lbl.Font = Fonts.Black
         lbl.TextSize = 10
         lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.Parent = tab
+        lbl.TextTruncate = Enum.TextTruncate.AtEnd
+        lbl.Parent = row
         return lbl
     end
 
+    -- ==========================================
+    -- PARAGRAPH / STATUS CARD
+    -- ==========================================
     function KopdesAPI.Paragraph(tab, title, content)
-        local card = Instance.new("Frame")
-        card.Size = UDim2.new(1, 0, 0, 44)
-        card.AutomaticSize = Enum.AutomaticSize.Y
-        card.BackgroundColor3 = Theme.BgCard
-        card.Parent = tab
-        addCorner(card, 7)
-        addStroke(card, 1, Theme.Border)
-        addPadding(card, 8, 10, 8, 10)
+        local holder, card = newShadowed(tab, "Frame", 0, Theme.Paper, true, 1)
+        holder.LayoutOrder = nextLayoutOrder(tab)
+        addPadding(card, 10, 12, 10, 12)
+
+        local marker = Instance.new("Frame")
+        marker.Size = UDim2.new(0, 10, 0, 10)
+        marker.Position = UDim2.new(0, 0, 0, 2)
+        marker.BackgroundColor3 = Theme.Blue
+        marker.BorderSizePixel = 0
+        marker.Parent = card
+        addCorner(marker, 1)
+        addStroke(marker, BORDER_WIDTH, Theme.Ink)
 
         local tLbl = Instance.new("TextLabel")
-        tLbl.Size = UDim2.new(1, 0, 0, 15)
+        tLbl.Size = UDim2.new(1, -18, 0, 16)
+        tLbl.Position = UDim2.new(0, 18, 0, 0)
         tLbl.BackgroundTransparency = 1
         tLbl.Text = tostring(title)
-        tLbl.TextColor3 = Theme.TextPrimary
-        tLbl.Font = Enum.Font.GothamBold
+        tLbl.TextColor3 = Theme.Ink
+        tLbl.Font = Fonts.Black
         tLbl.TextSize = 12
         tLbl.TextXAlignment = Enum.TextXAlignment.Left
+        tLbl.TextTruncate = Enum.TextTruncate.AtEnd
         tLbl.Parent = card
 
         local cLbl = Instance.new("TextLabel")
         cLbl.Size = UDim2.new(1, 0, 0, 0)
-        cLbl.Position = UDim2.new(0, 0, 0, 17)
+        cLbl.Position = UDim2.new(0, 0, 0, 20)
         cLbl.AutomaticSize = Enum.AutomaticSize.Y
         cLbl.BackgroundTransparency = 1
         cLbl.Text = tostring(content)
         cLbl.TextColor3 = Theme.TextMuted
-        cLbl.Font = Enum.Font.Gotham
+        cLbl.Font = Fonts.Medium
         cLbl.TextSize = 11
         cLbl.TextWrapped = true
         cLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -533,30 +904,45 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
                     if data.Title or data.title then tLbl.Text = tostring(data.Title or data.title) end
                     if data.Content or data.content then cLbl.Text = tostring(data.Content or data.content) end
                 end
-            end
+            end,
         }
     end
 
+    -- ==========================================
+    -- BUTTON (PRESSABLE HARD SHADOW)
+    -- ==========================================
     function KopdesAPI.Button(tab, name, callback)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, 34)
-        btn.BackgroundColor3 = Theme.BgCard
-        btn.Text = tostring(name)
-        btn.TextColor3 = Theme.TextPrimary
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = 11
-        btn.AutoButtonColor = false
-        btn.Parent = tab
-        addCorner(btn, 7)
-        local stroke = addStroke(btn, 1, Theme.Border)
+        local holder, btn = newShadowed(tab, "TextButton", 42, Theme.Accent, false, 1)
+        holder.LayoutOrder = nextLayoutOrder(tab)
 
+        btn.Text = tostring(name)
+        btn.TextColor3 = Theme.Ink
+        btn.Font = Fonts.Black
+        btn.TextSize = 12
+        btn.TextXAlignment = Enum.TextXAlignment.Center
+        btn.TextTruncate = Enum.TextTruncate.AtEnd
+        btn.AutoButtonColor = false
+        addPadding(btn, 0, 12, 0, 12)
+
+        local function press()
+            tween(btn, { Position = UDim2.new(0, 2, 0, 2) }, 0.05)
+        end
+        local function release()
+            tween(btn, { Position = UDim2.new(0, 0, 0, 0) }, 0.08)
+        end
+
+        btn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                press()
+            end
+        end)
+        btn.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                release()
+            end
+        end)
+        btn.MouseLeave:Connect(release)
         btn.MouseButton1Click:Connect(function()
-            tween(btn, { BackgroundColor3 = Theme.Accent }, 0.08)
-            tween(stroke, { Color = Theme.Accent }, 0.08)
-            task.delay(0.14, function()
-                tween(btn, { BackgroundColor3 = Theme.BgCard }, 0.14)
-                tween(stroke, { Color = Theme.Border }, 0.14)
-            end)
             if callback then task.spawn(callback) end
         end)
 
@@ -564,52 +950,56 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
             _type = "Button",
             Set = function(_, newText)
                 btn.Text = tostring(newText)
-            end
+            end,
         }
     end
 
+    -- ==========================================
+    -- TOGGLE NEO-BRUTALISM
+    -- ==========================================
     function KopdesAPI.Toggle(tab, name, defaultVal, callback)
         local state = defaultVal == true
-
-        local row = Instance.new("TextButton")
-        row.Size = UDim2.new(1, 0, 0, 36)
-        row.BackgroundColor3 = Theme.BgCard
+        local holder, row = newShadowed(tab, "TextButton", 46, Theme.Paper, false, 1)
+        holder.LayoutOrder = nextLayoutOrder(tab)
         row.Text = ""
         row.AutoButtonColor = false
-        row.Parent = tab
-        addCorner(row, 7)
-        addStroke(row, 1, Theme.Border)
 
         local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, -62, 1, 0)
-        lbl.Position = UDim2.new(0, 10, 0, 0)
+        lbl.Size = UDim2.new(1, -80, 1, 0)
+        lbl.Position = UDim2.new(0, 12, 0, 0)
         lbl.BackgroundTransparency = 1
         lbl.Text = tostring(name)
-        lbl.TextColor3 = Theme.TextPrimary
-        lbl.Font = Enum.Font.GothamMedium
+        lbl.TextColor3 = Theme.Ink
+        lbl.Font = Fonts.Bold
         lbl.TextSize = 11
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.TextTruncate = Enum.TextTruncate.AtEnd
+        lbl.ZIndex = 4
         lbl.Parent = row
 
         local pill = Instance.new("Frame")
-        pill.Size = UDim2.new(0, 40, 0, 20)
-        pill.Position = UDim2.new(1, -50, 0.5, -10)
-        pill.BackgroundColor3 = state and Theme.Accent or Theme.OffTrack
+        pill.Size = UDim2.new(0, 48, 0, 26)
+        pill.Position = UDim2.new(1, -60, 0.5, -13)
+        pill.BackgroundColor3 = state and Theme.Green or Theme.OffTrack
+        pill.ZIndex = 4
         pill.Parent = row
-        addCorner(pill, 10)
+        addCorner(pill, Theme.Radius)
+        addStroke(pill, BORDER_WIDTH, Theme.Ink)
 
         local knob = Instance.new("Frame")
-        knob.Size = UDim2.new(0, 14, 0, 14)
-        knob.Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
-        knob.BackgroundColor3 = Theme.TextPrimary
+        knob.Size = UDim2.new(0, 18, 0, 18)
+        knob.Position = state and UDim2.new(1, -22, 0.5, -9) or UDim2.new(0, 4, 0.5, -9)
+        knob.BackgroundColor3 = Theme.Ink
+        knob.ZIndex = 5
         knob.Parent = pill
-        addCorner(knob, 7)
+        addCorner(knob, 1)
 
         local function applyState(newState, fireCb)
             state = newState == true
-            tween(pill, { BackgroundColor3 = state and Theme.Accent or Theme.OffTrack }, 0.15)
-            tween(knob, { Position = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7) }, 0.15)
+            tween(pill, { BackgroundColor3 = state and Theme.Green or Theme.OffTrack }, 0.12)
+            tween(knob, {
+                Position = state and UDim2.new(1, -22, 0.5, -9) or UDim2.new(0, 4, 0.5, -9),
+            }, 0.12)
             if fireCb and callback then
                 task.spawn(callback, state)
             end
@@ -622,64 +1012,94 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         return {
             _type = "Toggle",
             Set = function(_, newState)
-                applyState(newState, false)
-            end
+                applyState(newState == true, false)
+            end,
         }
     end
 
+    -- ==========================================
+    -- SLIDER NEO-BRUTALISM
+    -- ==========================================
     function KopdesAPI.Slider(tab, name, minVal, maxVal, inc, suffix, defaultVal, callback)
         inc = inc or 1
         suffix = suffix or ""
         local current = math.clamp(defaultVal or minVal, minVal, maxVal)
+        local draggingSlider = false
 
-        local card = Instance.new("Frame")
-        card.Size = UDim2.new(1, 0, 0, 48)
-        card.BackgroundColor3 = Theme.BgCard
-        card.Parent = tab
-        addCorner(card, 7)
-        addStroke(card, 1, Theme.Border)
-        addPadding(card, 7, 10, 7, 10)
+        local holder, card = newShadowed(tab, "Frame", 74, Theme.Paper, false, 1)
+        holder.LayoutOrder = nextLayoutOrder(tab)
 
         local titleLbl = Instance.new("TextLabel")
-        titleLbl.Size = UDim2.new(0.7, 0, 0, 15)
+        titleLbl.Size = UDim2.new(1, -136, 0, 16)
+        titleLbl.Position = UDim2.new(0, 12, 0, 9)
         titleLbl.BackgroundTransparency = 1
         titleLbl.Text = tostring(name)
-        titleLbl.TextColor3 = Theme.TextPrimary
-        titleLbl.Font = Enum.Font.GothamMedium
+        titleLbl.TextColor3 = Theme.Ink
+        titleLbl.Font = Fonts.Bold
         titleLbl.TextSize = 11
         titleLbl.TextXAlignment = Enum.TextXAlignment.Left
         titleLbl.TextTruncate = Enum.TextTruncate.AtEnd
         titleLbl.Parent = card
 
+        local valBadge = Instance.new("Frame")
+        valBadge.Size = UDim2.new(0, 110, 0, 22)
+        valBadge.Position = UDim2.new(1, -122, 0, 7)
+        valBadge.BackgroundColor3 = Theme.Accent
+        valBadge.Parent = card
+        addCorner(valBadge, Theme.Radius)
+        addStroke(valBadge, BORDER_WIDTH, Theme.Ink)
+
         local valLbl = Instance.new("TextLabel")
-        valLbl.Size = UDim2.new(0.3, 0, 0, 15)
-        valLbl.Position = UDim2.new(0.7, 0, 0, 0)
+        valLbl.Size = UDim2.new(1, 0, 1, 0)
         valLbl.BackgroundTransparency = 1
         valLbl.Text = tostring(current) .. suffix
-        valLbl.TextColor3 = Theme.Accent
-        valLbl.Font = Enum.Font.GothamBold
-        valLbl.TextSize = 11
-        valLbl.TextXAlignment = Enum.TextXAlignment.Right
-        valLbl.Parent = card
+        valLbl.TextColor3 = Theme.Ink
+        valLbl.Font = Fonts.Black
+        valLbl.TextSize = 10
+        valLbl.TextXAlignment = Enum.TextXAlignment.Center
+        valLbl.TextTruncate = Enum.TextTruncate.AtEnd
+        valLbl.Parent = valBadge
+        addPadding(valLbl, 0, 4, 0, 4)
 
         local track = Instance.new("Frame")
-        track.Size = UDim2.new(1, 0, 0, 8)
-        track.Position = UDim2.new(0, 0, 0, 24)
-        track.BackgroundColor3 = Theme.BgInput
+        track.Size = UDim2.new(1, -24, 0, 14)
+        track.Position = UDim2.new(0, 12, 0, 42)
+        track.BackgroundColor3 = Theme.OffTrack
         track.Parent = card
-        addCorner(track, 4)
-        addStroke(track, 1, Theme.Border)
+        addCorner(track, Theme.Radius)
+        addStroke(track, BORDER_WIDTH, Theme.Ink)
 
         local fill = Instance.new("Frame")
         local initAlpha = (current - minVal) / math.max(maxVal - minVal, 0.0001)
         fill.Size = UDim2.new(math.clamp(initAlpha, 0, 1), 0, 1, 0)
-        fill.BackgroundColor3 = Theme.Accent
+        fill.BackgroundColor3 = Theme.Blue
+        fill.BorderSizePixel = 0
+        fill.ZIndex = 2
         fill.Parent = track
-        addCorner(fill, 4)
+        addCorner(fill, 1)
 
-        local draggingSlider = false
+        local knob = Instance.new("Frame")
+        knob.Size = UDim2.new(0, 16, 0, 16)
+        knob.Position = UDim2.new(math.clamp(initAlpha, 0, 1), -8, 0.5, -8)
+        knob.BackgroundColor3 = Theme.Ink
+        knob.ZIndex = 3
+        knob.Parent = track
+        addCorner(knob, 2)
+        addStroke(knob, 1.5, Theme.Paper)
+
+        local hitbox = Instance.new("Frame")
+        hitbox.Size = UDim2.new(1, 0, 0, 38)
+        hitbox.Position = UDim2.new(0, 0, 0, 30)
+        hitbox.BackgroundTransparency = 1
+        hitbox.ZIndex = 5
+        hitbox.Parent = card
+
         local function updateFromInput(inputPos)
-            local relX = math.clamp((inputPos.X - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
+            local relX = math.clamp(
+                (inputPos.X - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1),
+                0,
+                1
+            )
             local raw = minVal + (maxVal - minVal) * relX
             local stepped = math.floor((raw / inc) + 0.5) * inc
             stepped = tonumber(string.format("%.4f", math.clamp(stepped, minVal, maxVal)))
@@ -687,19 +1107,24 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
 
             local alpha = (current - minVal) / math.max(maxVal - minVal, 0.0001)
             fill.Size = UDim2.new(math.clamp(alpha, 0, 1), 0, 1, 0)
+            knob.Position = UDim2.new(math.clamp(alpha, 0, 1), -8, 0.5, -8)
             valLbl.Text = tostring(current) .. suffix
             if callback then task.spawn(callback, current) end
         end
 
-        track.InputBegan:Connect(function(input)
+        local function beginDrag(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 draggingSlider = true
                 updateFromInput(input.Position)
             end
-        end)
+        end
+
+        track.InputBegan:Connect(beginDrag)
+        hitbox.InputBegan:Connect(beginDrag)
 
         UserInputService.InputChanged:Connect(function(input)
-            if draggingSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            if not draggingSlider then return end
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
                 updateFromInput(input.Position)
             end
         end)
@@ -713,145 +1138,193 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         return card
     end
 
+    -- ==========================================
+    -- DROPDOWN NEO-BRUTALISM
+    -- ==========================================
     function KopdesAPI.Dropdown(tab, name, options, defaultOpt, callback)
+        options = options or {}
         local currentOpt = defaultOpt or options[1] or "-"
         local expanded = false
 
-        local wrapper = Instance.new("Frame")
-        wrapper.Size = UDim2.new(1, 0, 0, 36)
-        wrapper.AutomaticSize = Enum.AutomaticSize.Y
-        wrapper.BackgroundColor3 = Theme.BgCard
-        wrapper.Parent = tab
-        addCorner(wrapper, 7)
-        addStroke(wrapper, 1, Theme.Border)
+        local holder, card, _, syncSize = newShadowed(tab, "Frame", 44, Theme.Paper, false, 1)
+        holder.LayoutOrder = nextLayoutOrder(tab)
 
         local header = Instance.new("TextButton")
-        header.Size = UDim2.new(1, 0, 0, 36)
+        header.Size = UDim2.new(1, 0, 0, 44)
         header.BackgroundTransparency = 1
         header.Text = ""
-        header.Parent = wrapper
+        header.AutoButtonColor = false
+        header.ZIndex = 3
+        header.Parent = card
 
         local headerLbl = Instance.new("TextLabel")
-        headerLbl.Size = UDim2.new(1, -34, 1, 0)
-        headerLbl.Position = UDim2.new(0, 10, 0, 0)
+        headerLbl.Size = UDim2.new(1, -46, 1, 0)
+        headerLbl.Position = UDim2.new(0, 12, 0, 0)
         headerLbl.BackgroundTransparency = 1
-        headerLbl.Text = name .. ": " .. tostring(currentOpt)
-        headerLbl.TextColor3 = Theme.TextPrimary
-        headerLbl.Font = Enum.Font.GothamMedium
+        headerLbl.Text = tostring(name) .. ": " .. tostring(currentOpt)
+        headerLbl.TextColor3 = Theme.Ink
+        headerLbl.Font = Fonts.Bold
         headerLbl.TextSize = 11
         headerLbl.TextXAlignment = Enum.TextXAlignment.Left
         headerLbl.TextTruncate = Enum.TextTruncate.AtEnd
+        headerLbl.ZIndex = 4
         headerLbl.Parent = header
 
         local chevron = Instance.new("ImageLabel")
-        chevron.Size = UDim2.new(0, 14, 0, 14)
-        chevron.Position = UDim2.new(1, -24, 0.5, -7)
+        chevron.Size = UDim2.new(0, 15, 0, 15)
+        chevron.Position = UDim2.new(1, -27, 0.5, -7.5)
         chevron.BackgroundTransparency = 1
         chevron.Image = Icons.ChevronDown
-        chevron.ImageColor3 = Theme.TextMuted
+        chevron.ImageColor3 = Theme.Ink
+        chevron.ZIndex = 4
         chevron.Parent = header
+
+        local divider = Instance.new("Frame")
+        divider.Size = UDim2.new(1, 0, 0, 3)
+        divider.Position = UDim2.new(0, 0, 0, 41)
+        divider.BackgroundColor3 = Theme.Ink
+        divider.BorderSizePixel = 0
+        divider.Visible = false
+        divider.ZIndex = 4
+        divider.Parent = card
 
         local listFrame = Instance.new("Frame")
         listFrame.Size = UDim2.new(1, 0, 0, 0)
-        listFrame.Position = UDim2.new(0, 0, 0, 36)
+        listFrame.Position = UDim2.new(0, 0, 0, 44)
         listFrame.AutomaticSize = Enum.AutomaticSize.Y
         listFrame.BackgroundTransparency = 1
         listFrame.Visible = false
-        listFrame.Parent = wrapper
-        addPadding(listFrame, 2, 6, 6, 6)
+        listFrame.ZIndex = 3
+        listFrame.Parent = card
+        addPadding(listFrame, 4, 10, 10, 10)
 
         local listLayout = Instance.new("UIListLayout")
-        listLayout.Padding = UDim.new(0, 4)
+        listLayout.Padding = UDim.new(0, 6)
+        listLayout.SortOrder = Enum.SortOrder.LayoutOrder
         listLayout.Parent = listFrame
+
+        local function resizeCard()
+            local h = 44
+            if expanded then
+                h = h + math.max(listFrame.AbsoluteSize.Y, 1)
+            end
+            syncSize(h)
+        end
 
         local function buildOptions(opts)
             for _, child in ipairs(listFrame:GetChildren()) do
-                if child:IsA("TextButton") then child:Destroy() end
+                if child:IsA("TextButton") then
+                    child:Destroy()
+                end
             end
-            for _, opt in ipairs(opts) do
+
+            for _, opt in ipairs(opts or {}) do
+                local optText = tostring(opt)
                 local optBtn = Instance.new("TextButton")
-                optBtn.Size = UDim2.new(1, 0, 0, 28)
-                optBtn.BackgroundColor3 = Theme.BgInput
-                optBtn.Text = "  " .. tostring(opt)
-                optBtn.TextColor3 = Theme.TextPrimary
-                optBtn.Font = Enum.Font.GothamMedium
+                optBtn.Size = UDim2.new(1, 0, 0, 32)
+                optBtn.BackgroundColor3 = (optText == currentOpt) and Theme.AccentSoft or Theme.Paper
+                optBtn.Text = optText
+                optBtn.TextColor3 = Theme.Ink
+                optBtn.Font = Fonts.Bold
                 optBtn.TextSize = 11
                 optBtn.TextXAlignment = Enum.TextXAlignment.Left
                 optBtn.TextTruncate = Enum.TextTruncate.AtEnd
+                optBtn.AutoButtonColor = false
+                optBtn.ZIndex = 4
                 optBtn.Parent = listFrame
-                addCorner(optBtn, 5)
-                addStroke(optBtn, 1, Theme.Border)
+                addCorner(optBtn, Theme.Radius)
+                addStroke(optBtn, 1.5, Theme.Ink)
+                addPadding(optBtn, 0, 8, 0, 8)
 
                 optBtn.MouseButton1Click:Connect(function()
-                    currentOpt = tostring(opt)
-                    headerLbl.Text = name .. ": " .. currentOpt
+                    currentOpt = optText
+                    headerLbl.Text = tostring(name) .. ": " .. currentOpt
                     expanded = false
                     listFrame.Visible = false
-                    tween(chevron, { Rotation = 0 }, 0.14)
+                    divider.Visible = false
+                    tween(chevron, { Rotation = 0 }, 0.12)
+                    for _, other in ipairs(listFrame:GetChildren()) do
+                        if other:IsA("TextButton") then
+                            other.BackgroundColor3 = (other.Text == currentOpt) and Theme.AccentSoft or Theme.Paper
+                        end
+                    end
+                    resizeCard()
                     if callback then task.spawn(callback, currentOpt) end
                 end)
             end
-        end
 
-        buildOptions(options)
+            task.defer(function()
+                if expanded then resizeCard() end
+            end)
+        end
 
         header.MouseButton1Click:Connect(function()
             expanded = not expanded
             listFrame.Visible = expanded
-            tween(chevron, { Rotation = expanded and 180 or 0 }, 0.14)
+            divider.Visible = expanded
+            tween(chevron, { Rotation = expanded and 180 or 0 }, 0.12)
+            resizeCard()
+            task.defer(resizeCard)
         end)
+
+        listFrame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            if expanded then resizeCard() end
+        end)
+
+        buildOptions(options)
 
         return {
             _type = "Dropdown",
             Refresh = function(_, newOptions)
-                if typeof(newOptions) == "table" then
-                    buildOptions(newOptions)
-                end
-            end
+                buildOptions(newOptions or {})
+            end,
         }
     end
 
+    -- ==========================================
+    -- INPUT NEO-BRUTALISM
+    -- ==========================================
     function KopdesAPI.Input(tab, name, placeholder, callback)
-        local card = Instance.new("Frame")
-        card.Size = UDim2.new(1, 0, 0, 56)
-        card.BackgroundColor3 = Theme.BgCard
-        card.Parent = tab
-        addCorner(card, 7)
-        addStroke(card, 1, Theme.Border)
-        addPadding(card, 7, 10, 7, 10)
+        local holder, card = newShadowed(tab, "Frame", 78, Theme.Paper, false, 1)
+        holder.LayoutOrder = nextLayoutOrder(tab)
 
         local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, 0, 0, 14)
+        lbl.Size = UDim2.new(1, -24, 0, 14)
+        lbl.Position = UDim2.new(0, 12, 0, 9)
         lbl.BackgroundTransparency = 1
         lbl.Text = tostring(name)
-        lbl.TextColor3 = Theme.TextPrimary
-        lbl.Font = Enum.Font.GothamMedium
+        lbl.TextColor3 = Theme.Ink
+        lbl.Font = Fonts.Bold
         lbl.TextSize = 11
         lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.TextTruncate = Enum.TextTruncate.AtEnd
         lbl.Parent = card
 
         local box = Instance.new("TextBox")
-        box.Size = UDim2.new(1, 0, 0, 24)
-        box.Position = UDim2.new(0, 0, 0, 19)
+        box.Size = UDim2.new(1, -24, 0, 32)
+        box.Position = UDim2.new(0, 12, 0, 31)
         box.BackgroundColor3 = Theme.BgInput
         box.Text = ""
         box.PlaceholderText = tostring(placeholder or "")
         box.PlaceholderColor3 = Theme.TextMuted
-        box.TextColor3 = Theme.TextPrimary
-        box.Font = Enum.Font.Gotham
+        box.TextColor3 = Theme.Ink
+        box.Font = Fonts.Medium
         box.TextSize = 11
         box.ClearTextOnFocus = false
+        box.TextXAlignment = Enum.TextXAlignment.Left
+        box.ZIndex = 3
         box.Parent = card
-        addCorner(box, 5)
-        local boxStroke = addStroke(box, 1, Theme.Border)
-        addPadding(box, 0, 8, 0, 8)
+        addCorner(box, Theme.Radius)
+        local boxStroke = addStroke(box, BORDER_WIDTH, Theme.Ink)
+        addPadding(box, 0, 10, 0, 10)
 
         box.Focused:Connect(function()
-            tween(boxStroke, { Color = Theme.Accent }, 0.12)
+            tween(box, { BackgroundColor3 = Theme.AccentSoft }, 0.12)
+            tween(boxStroke, { Color = Theme.Ink }, 0.12)
         end)
 
         box.FocusLost:Connect(function()
-            tween(boxStroke, { Color = Theme.Border }, 0.12)
+            tween(box, { BackgroundColor3 = Theme.BgInput }, 0.12)
             if callback then
                 task.spawn(callback, box.Text)
             end
@@ -860,6 +1333,9 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         return box
     end
 
+    -- ==========================================
+    -- UPDATE ELEMENT TEXT
+    -- ==========================================
     function KopdesAPI.SetElementText(elem, newText, newContent)
         if not elem then return end
         pcall(function()
