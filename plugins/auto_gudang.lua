@@ -274,7 +274,7 @@ StatusGudangCard = API.Paragraph(
     "Status: Nonaktif (Mode Acak & Otomatis)"
 )
 
-API.Slider(GudangTab, "Jeda Antar Kardus (Detik)", 0.15, 1.50, 0.05, " dtk", 0.25, function(val)
+API.Slider(GudangTab, "Jeda Antar Kardus (Detik)", 0.15, 1.50, 0.05, " detik", 0.25, function(val)
     jedaAntarAksi = tonumber(val) or 0.25
 end)
 

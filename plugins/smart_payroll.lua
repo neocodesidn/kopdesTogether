@@ -208,14 +208,14 @@ local function prosesSmartGaji(recapData, isManual)
 
             API.Notify(
                 "Smart Payroll " .. labelWaktu .. " Cair!",
-                "Profit: Rp " .. API.FormatRupiah(totalProfit) .. "\nCair: Rp " .. API.FormatRupiah(gajiPerOrang) .. "/orang (" .. berhasil .. " pekerja)",
+                "Profit: Rp " .. API.FormatRupiah(totalProfit) .. " | Cair: Rp " .. API.FormatRupiah(gajiPerOrang) .. "/orang (" .. berhasil .. " pekerja)",
                 5
             )
 
             if berhasil > 0 then
                 API.Emit("PayrollPaid", {
                     waktu = labelWaktu,
-                    mode = "Smart Payroll (" .. persenProfitGaji .. "% • Max " .. maxGajiPerOrangJuta .. "Jt)",
+                    mode = "Smart Payroll (" .. persenProfitGaji .. "% • Max " .. maxGajiPerOrangJuta .. " Juta)",
                     totalProfit = totalProfit,
                     penghasilan = recapData and recapData.penghasilan or 0,
                     restock = recapData and recapData.restock or 0,
@@ -259,7 +259,7 @@ local function prosesSmartGaji(recapData, isManual)
                 )
                 API.Emit("PayrollPaid", {
                     waktu = labelWaktu,
-                    mode = "Smart Perorangan (" .. persenProfitGaji .. "% • Max " .. maxGajiPerOrangJuta .. "Jt)",
+                    mode = "Smart Perorangan (" .. persenProfitGaji .. "% • Max " .. maxGajiPerOrangJuta .. " Juta)",
                     totalProfit = totalProfit,
                     penghasilan = recapData and recapData.penghasilan or 0,
                     restock = recapData and recapData.restock or 0,
@@ -286,14 +286,14 @@ end
 -- ==========================================
 local SmartTab = API.CreateTab("Smart Payroll")
 
-API.Section(SmartTab, "Rekap Profit Harian (ShowDayRecap)")
+API.Section(SmartTab, "Rekap Profit Harian (Selesai Hari)")
 local RecapCard = API.Paragraph(
     SmartTab,
     "Menunggu Tutup Hari (21:00)...",
-    "Data profit bersih otomatis terbaca saat ShowDayRecap muncul."
+    "Data profit bersih otomatis terbaca saat rekap harian selesai."
 )
 
-API.Section(SmartTab, "Rumus Smart Gaji (Anti-Overpay)")
+API.Section(SmartTab, "Rumus Smart Gaji (Jangan Bayar Berlebih)")
 API.Slider(SmartTab, "Porsi Anggaran dari Total Profit", 5, 50, 5, "% Profit", 25, function(val)
     persenProfitGaji = val
 end)
@@ -307,9 +307,9 @@ API.Toggle(SmartTab, "Filter Pekerja Aktif (Wajib Kerja di Plot1)", true, functi
 end)
 
 API.Dropdown(SmartTab, "Mode Pembagian", {
-    "Smart Profit Share (Bagi Rata + Cap)",
-    "Perorangan (1 Anggota + Cap)"
-}, "Smart Profit Share (Bagi Rata + Cap)", function(opt)
+    "Bagian Bersama (Bagi Rata)",
+    "Ke Satu Anggota"
+}, "Bagian Bersama (Bagi Rata)", function(opt)
     modePembagian = opt
 end)
 
@@ -333,7 +333,7 @@ API.Button(SmartTab, "Refresh Daftar Anggota", function()
 end)
 
 API.Section(SmartTab, "Otomatisasi Tutup Hari (21:00)")
-API.Toggle(SmartTab, "Mode AFK: Ulangi Tiap Ganti Hari", true, function(val)
+API.Toggle(SmartTab, "Mode Otomatis: Gaji Tiap Ganti Hari", true, function(val)
     modeUlangTiapHari = val
 end)
 
@@ -346,7 +346,7 @@ SmartPayrollToggle = API.Toggle(SmartTab, "Auto Smart Payroll Saat Tutup Hari", 
     end
     API.Notify(
         val and "Smart Payroll Aktif" or "Smart Payroll Mati",
-        val and ("Mengambil " .. persenProfitGaji .. "% profit (Max " .. maxGajiPerOrangJuta .. "Jt/orang).") or "Smart Payroll dihentikan.",
+        val and ("Mengambil " .. persenProfitGaji .. "% profit (Max " .. maxGajiPerOrangJuta .. " Juta per orang).") or "Smart Payroll dihentikan.",
         3
     )
 end)
@@ -375,9 +375,9 @@ task.spawn(function()
             if typeof(data) ~= "table" then return end
             lastRecapData = data
 
-            local teksJudul = "Hari " .. tostring(data.day or "?") .. " • Pelanggan: " .. tostring(data.pelanggan or 0)
+            local teksJudul = "Hari " .. tostring(data.day or "?") .. " • Anggota: " .. tostring(data.pelanggan or 0)
             local teksIsi = string.format(
-                "Total Profit: Rp %s\nPenghasilan: Rp %s | Restock: Rp %s",
+                "Total: Rp %s • Pendapatan: Rp %s • Pembelian: Rp %s",
                 API.FormatRupiah(data.totalProfit or 0),
                 API.FormatRupiah(data.penghasilan or 0),
                 API.FormatRupiah(data.restock or 0)

@@ -608,7 +608,7 @@ API.Toggle(KulkasTab, "Auto Isi Kulkas Minuman", false, function(val)
         jalankanSiklusKulkas(false)
     else
         API.Notify("Kulkas Minuman Mati", "Auto isi kulkas minuman dihentikan.", 2)
-        perbaruiStatusUI(autoDagingEnabled and "Siaga (Event-Driven Aktif)" or "Nonaktif")
+        perbaruiStatusUI(autoDagingEnabled and "Siaga (Aktif)" or "Nonaktif")
     end
 end)
 
@@ -628,7 +628,7 @@ API.Toggle(KulkasTab, "Auto Isi Kulkas Daging", false, function(val)
         jalankanSiklusKulkas(false)
     else
         API.Notify("Kulkas Daging Mati", "Auto isi kulkas daging dihentikan.", 2)
-        perbaruiStatusUI(autoMinumanEnabled and "Siaga (Event-Driven Aktif)" or "Nonaktif")
+        perbaruiStatusUI(autoMinumanEnabled and "Siaga (Aktif)" or "Nonaktif")
     end
 end)
 

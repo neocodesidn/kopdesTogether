@@ -624,17 +624,17 @@ local function perbaruiStatusUI(teksCustom)
     local teksStatus = teksCustom
     if not teksStatus then
         if pegangBarangLain then
-            teksStatus = "Status: Tertahan (Tangan memegang barang non-Makanan)"
+            teksStatus = "Status: Menunggu (Tanganmu sedang memegang barang lain)"
         elseif autoPlaceRakEnabled then
-            teksStatus = (#slotKosong > 0 and "Status: Siaga / Mengisi slot kosong..." or "Status: Siaga (Semua slot 0/12 penuh)")
+            teksStatus = (#slotKosong > 0 and "Status: Siaga (Mengisi slot kosong...)" or "Status: Siaga (Semua slot sudah penuh)")
         else
-            teksStatus = "Status: Nonaktif (Database: " .. tostring(totalItemMakanan) .. " makanan)"
+            teksStatus = "Status: Nonaktif (Daftar Makanan: " .. tostring(totalItemMakanan) .. " item)"
         end
     end
 
     API.SetElementText(
         StatusInputCard,
-        "Slot Kosong (0/12): " .. tostring(#slotKosong) .. "  |  Kardus Makanan: " .. tostring(#kardusMakanan),
+        "Slot Kosong: " .. tostring(#slotKosong) .. "  |  Item Makanan: " .. tostring(#kardusMakanan),
         teksStatus
     )
 end
@@ -761,12 +761,12 @@ local InputTab = API.CreateTab("Makanan")
 API.Section(InputTab, "Status Rak Makanan (" .. PlotToko.Name .. ")")
 StatusInputCard = API.Paragraph(
     InputTab,
-    "Slot Kosong (0/12): -  |  Kardus Makanan: -",
-    "Status: Nonaktif (Database: " .. tostring(totalItemMakanan) .. " makanan)"
+    "Slot Kosong: -  |  Item Makanan: -",
+    "Status: Nonaktif (Daftar Makanan: " .. tostring(totalItemMakanan) .. " item)"
 )
 
 API.Section(InputTab, "Pengaturan Kecepatan")
-API.Slider(InputTab, "Jeda Antar Slot (Detik)", 0.20, 1.50, 0.05, " dtk", 0.25, function(val)
+API.Slider(InputTab, "Jeda Antar Slot (Detik)", 0.20, 1.50, 0.05, " detik", 0.25, function(val)
     jedaAntarRak = tonumber(val) or 0.25
 end)
 
@@ -785,7 +785,7 @@ end)
 API.Paragraph(
     InputTab,
     "Cara Kerja Auto Makanan",
-    "Mengambil kardus khusus kategori Makanan (Default & Lisensi) dan menatanya ke slot kosong (0/12) pada RakBelanja, RakBelanjaHitam, dan RakKecil secara otomatis tanpa looping."
+    "Mengambil makanan dari kategori Makanan (Umum & Lisensi) lalu menaruhnya ke rak penyimpanan yang kosong secara otomatis."
 )
 
 API.Section(InputTab, "Aksi Manual")
@@ -798,7 +798,7 @@ API.Button(InputTab, "Isi Semua Slot Kosong Sekarang (1x)", function()
 
     local daftar = cariSemuaSlotKosong()
     if #daftar == 0 then
-        API.Notify("Tidak Ada Slot Kosong", "Semua papan RakBelanja & RakKecil sudah terisi.", 3)
+        API.Notify("Tidak Ada Slot Kosong", "Semua rak penyimpanan sudah terisi.", 3)
         return
     end
     jalankanSiklusIsiRak(true)
@@ -812,7 +812,7 @@ API.Button(InputTab, "Refresh Daftar Makanan & Reset Cache", function()
     namaPickedTerverifikasi = nil
     muatDatabaseProduct()
     perbaruiStatusUI()
-    API.Notify("Diperbarui", "Whitelist Makanan (" .. tostring(totalItemMakanan) .. " produk) & cache slot diperbarui.", 2)
+    API.Notify("Diperbarui", "Daftar Makanan (" .. tostring(totalItemMakanan) .. " item) & daftar rak diperbarui.", 2)
 end)
 
 perbaruiStatusUI()

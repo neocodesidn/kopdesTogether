@@ -256,8 +256,8 @@ API.Button(BankTab, "Refresh Daftar Anggota Server", function()
     API.Notify("Daftar Diperbarui", "Daftar pemain di server telah dimuat ulang.", 2)
 end)
 
-API.Section(BankTab, "Otomatisasi Gajian Ganti Hari (21:00)")
-API.Toggle(BankTab, "Mode AFK: Ulangi Tiap Ganti Hari", true, function(val)
+API.Section(BankTab, "Gajian Otomatis (Ganti Hari)")
+API.Toggle(BankTab, "Mode Otomatis: Gaji Tiap Ganti Hari", true, function(val)
     modeUlangTiapHari = val
 end)
 

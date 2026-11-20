@@ -478,7 +478,7 @@ local function jalankanSiklusSayuran(sekaliJalan)
         end
 
         sedangMengisi = false
-        perbaruiStatusUI(autoSayuranEnabled and "Siaga (Event-Driven Aktif)" or "Nonaktif")
+        perbaruiStatusUI(autoSayuranEnabled and "Siaga (Aktif)" or "Nonaktif")
 
         if sekaliJalan then
             API.Notify("Selesai", "Berhasil mengisi " .. tostring(terisiCount) .. " slot Rak Sayuran.", 3)
@@ -501,7 +501,7 @@ end)
 
 clickObject.ChildRemoved:Connect(function(child)
     if child.Name == "Kardus" and not sedangMengisi then
-        perbaruiStatusUI(autoSayuranEnabled and "Siaga (Event-Driven Aktif)" or "Nonaktif")
+        perbaruiStatusUI(autoSayuranEnabled and "Siaga (Aktif)" or "Nonaktif")
     end
 end)
 
@@ -518,14 +518,14 @@ StatusSayuranCard = API.Paragraph(
 )
 
 API.Section(SayuranTab, "Kontrol Auto Sayuran")
-API.Slider(SayuranTab, "Jeda Antar Slot (Detik)", 0.20, 1.50, 0.05, " dtk", 0.30, function(val)
+API.Slider(SayuranTab, "Jeda Antar Slot (Detik)", 0.20, 1.50, 0.05, " detik", 0.30, function(val)
     jedaAntarSlot = tonumber(val) or 0.30
 end)
 
 API.Toggle(SayuranTab, "Auto Isi Rak Sayuran", false, function(val)
     autoSayuranEnabled = val
     if val then
-        API.Notify("Auto Sayuran Aktif", "Mengisi produk Sayuran (Lisensi_X) ke RakSayuran1..RakSayuranX.", 2)
+        API.Notify("Auto Sayuran Aktif", "Mengisi produk Sayuran ke rak penyimpanan.", 2)
         jalankanSiklusSayuran(false)
     else
         API.Notify("Auto Sayuran Mati", "Auto isi rak sayuran dihentikan.", 2)
@@ -536,21 +536,21 @@ end)
 API.Paragraph(
     SayuranTab,
     "Penjelasan Auto Sayuran",
-    "Memfilter kardus dari ReplicatedStorage.Product.Sayuran (Lisensi_X) dan menatanya ke slot kosong Rak1 - Rak6 pada seluruh RakSayuran1..RakSayuranX secara event-driven tanpa looping."
+    "Mengambil sayuran dari toko lalu menaruhnya ke rak penyimpanan kosong."
 )
 
 API.Section(SayuranTab, "Aksi Manual")
-API.Button(SayuranTab, "Isi Semua Rak Sayuran Sekarang (1x)", function()
+API.Button(SayuranTab, "Isi Semua Rak Sayuran Sekarang", function()
     jalankanSiklusSayuran(true)
 end)
 
-API.Button(SayuranTab, "Reset Cache & Refresh Lisensi", function()
+API.Button(SayuranTab, "Refresh Daftar & Atur Ulang", function()
     slotDitolakServer = {}
     kardusDitolakSementara = {}
     percobaanGagalTangan = 0
     muatDaftarSayuran()
-    perbaruiStatusUI(autoSayuranEnabled and "Siaga (Event-Driven Aktif)" or "Nonaktif")
-    API.Notify("Direset", "Daftar Lisensi Sayuran & cache slot diperbarui.", 2)
+    perbaruiStatusUI(autoSayuranEnabled and "Siaga (Aktif)" or "Nonaktif")
+    API.Notify("Diperbarui", "Daftar produk Sayuran diperbarui.", 2)
 end)
 
 perbaruiStatusUI("Nonaktif")
