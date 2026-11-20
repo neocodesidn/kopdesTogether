@@ -7,7 +7,7 @@ local SewaGamepassRemote = RemotesFolder and RemotesFolder:WaitForChild("SewaGam
 -- ==========================================
 -- KONFIGURASI SEWA PEKERJA
 -- ==========================================
-local DAFTAR_ROLE = { "Pengangkut", "Security", "Pembersih" }
+local DAFTAR_ROLE = { "Pengangkut", "Keamanan", "Pembersih" }
 
 local roleDipilih = "Pengangkut"
 local durasiHari = 1
@@ -29,7 +29,7 @@ local hariTerakhirDiproses = nil
 -- ==========================================
 local function eksekusiSewa(roleName, jumlahHari)
     if not SewaGamepassRemote then
-        API.Notify("Remote Tidak Ditemukan", "SewaGamepass tidak ada di ReplicatedStorage.Remotes.", 4)
+        API.Notify("Remote Tidak Ditemukan", "Sewa Gamepass tidak ditemukan.", 4)
         return false
     end
 
@@ -79,7 +79,7 @@ API.Dropdown(SewaTab, "Pilih Role Pekerja", DAFTAR_ROLE, "Pengangkut", function(
     perbaruiLabelTombol()
 end)
 
-API.Slider(SewaTab, "Durasi Sewa (Slider Cepat)", 1, 30, 1, " Hari", 1, function(val)
+API.Slider(SewaTab, "Durasi Sewa (dalam Hari)", 1, 30, 1, " Hari", 1, function(val)
     durasiHari = math.max(1, math.floor(tonumber(val) or 1))
     konfirmasiSingle = false
     konfirmasiSemua = false
@@ -103,7 +103,7 @@ API.Input(SewaTab, "Custom Angka Hari Bebas (Tekan Enter)", "Contoh: 7 atau 30",
     end
 end)
 
-API.Section(SewaTab, "Eksekusi Sewa (Konfirmasi 2x Tap)")
+API.Section(SewaTab, "Eksekusi Sewa (Konfirmasi 2x Klik)")
 
 SingleSewaButton = API.Button(SewaTab, "Sewa Pengangkut (1 Hari)", function()
     if not konfirmasiSingle then
@@ -158,15 +158,15 @@ AllSewaButton = API.Button(SewaTab, "Sewa Semua Role (1 Hari)", function()
             local total = sewaSemuaRole(durasiHari)
             if total > 0 then
                 sisaHariKontrak = durasiHari
-                API.Notify("Sewa Massal Berhasil!", total .. " role disewa selama " .. durasiHari .. " hari.", 4)
+                API.Notify("Sewa Untuk Semua Role Berhasil!", total .. " role disewa selama " .. durasiHari .. " hari.", 4)
             end
         end)
     end
 end)
 
-API.Section(SewaTab, "Otomatisasi AFK (Perpanjang Otomatis)")
+API.Section(SewaTab, "Otomatisasi Idle (Perpanjang Otomatis)")
 
-API.Toggle(SewaTab, "Perpanjang Semua Role (Jika Mati = Role Terpilih Saja)", false, function(val)
+API.Toggle(SewaTab, "Perpanjang Semua Role (Kalau Tidak Aktif, Pakai Role Terpilih)", false, function(val)
     perpanjangSemuaRole = val
 end)
 

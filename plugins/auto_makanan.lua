@@ -756,7 +756,7 @@ end)
 -- ==========================================
 -- UI TAB: [RESTOCK] MAKANAN
 -- ==========================================
-local InputTab = API.CreateTab("[RESTOCK] Makanan")
+local InputTab = API.CreateTab("Makanan")
 
 API.Section(InputTab, "Status Rak Makanan (" .. PlotToko.Name .. ")")
 StatusInputCard = API.Paragraph(

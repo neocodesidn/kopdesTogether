@@ -552,7 +552,7 @@ local function jalankanSiklusKulkas(sekaliJalan)
 
         sedangMengisi = false
         local adaYangAktif = autoMinumanEnabled or autoDagingEnabled
-        perbaruiStatusUI(adaYangAktif and "Siaga (Event-Driven Aktif)" or "Nonaktif")
+        perbaruiStatusUI(adaYangAktif and "Siaga (Aktif)" or "Nonaktif")
 
         if sekaliJalan then
             API.Notify("Selesai", "Berhasil mengisi " .. tostring(totalTerisi) .. " slot kulkas.", 3)
@@ -577,14 +577,14 @@ end)
 clickObject.ChildRemoved:Connect(function(child)
     if child.Name == "Kardus" and not sedangMengisi then
         local adaYangAktif = autoMinumanEnabled or autoDagingEnabled
-        perbaruiStatusUI(adaYangAktif and "Siaga (Event-Driven Aktif)" or "Nonaktif")
+        perbaruiStatusUI(adaYangAktif and "Siaga (Aktif)" or "Nonaktif")
     end
 end)
 
 -- ==========================================
 -- UI TAB: KULKAS (MINUMAN & DAGING)
 -- ==========================================
-local KulkasTab = API.CreateTab("[RESTOCK] Kulkas")
+local KulkasTab = API.CreateTab("Kulkas")
 
 API.Section(KulkasTab, "Status Kulkas (" .. PlotToko.Name .. ")")
 StatusKulkasCard = API.Paragraph(
@@ -594,7 +594,7 @@ StatusKulkasCard = API.Paragraph(
 )
 
 API.Section(KulkasTab, "Pengaturan Umum")
-API.Slider(KulkasTab, "Jeda Antar Slot (Detik)", 0.20, 1.50, 0.05, " dtk", 0.30, function(val)
+API.Slider(KulkasTab, "Jeda Antar Slot (Detik)", 0.20, 1.50, 0.05, " detik", 0.30, function(val)
     jedaAntarSlot = tonumber(val) or 0.30
 end)
 
@@ -604,7 +604,7 @@ API.Toggle(KulkasTab, "Auto Isi Kulkas Minuman", false, function(val)
     autoMinumanEnabled = val
     aturPrioritasKategori("Minuman", val)
     if val then
-        API.Notify("Kulkas Minuman Aktif", "Antrean prioritas: " .. table.concat(urutanPrioritas, " -> "), 2)
+        API.Notify("Kulkas Minuman Aktif", "Antrean: " .. table.concat(urutanPrioritas, " -> "), 2)
         jalankanSiklusKulkas(false)
     else
         API.Notify("Kulkas Minuman Mati", "Auto isi kulkas minuman dihentikan.", 2)
@@ -615,7 +615,7 @@ end)
 API.Paragraph(
     KulkasTab,
     "Penjelasan Kulkas Minuman",
-    "Memfilter kardus dari ReplicatedStorage.Product.Minuman (Lisensi_X) dan menatanya ke slot kosong Rak1 - Rak8 pada Kulkas1..KulkasX."
+    "Mengambil makanan Minuman dari toko lalu menaruhnya ke slot kosong kulkas."
 )
 
 -- FITUR 2: KULKAS DAGING
@@ -624,7 +624,7 @@ API.Toggle(KulkasTab, "Auto Isi Kulkas Daging", false, function(val)
     autoDagingEnabled = val
     aturPrioritasKategori("Daging", val)
     if val then
-        API.Notify("Kulkas Daging Aktif", "Antrean prioritas: " .. table.concat(urutanPrioritas, " -> "), 2)
+        API.Notify("Kulkas Daging Aktif", "Antrean: " .. table.concat(urutanPrioritas, " -> "), 2)
         jalankanSiklusKulkas(false)
     else
         API.Notify("Kulkas Daging Mati", "Auto isi kulkas daging dihentikan.", 2)
@@ -635,23 +635,23 @@ end)
 API.Paragraph(
     KulkasTab,
     "Penjelasan Kulkas Daging",
-    "Memfilter kardus dari ReplicatedStorage.Product.Daging (Lisensi_X) dan menatanya ke slot kosong Rak1 - Rak4 pada KulkasDaging1..KulkasDagingX."
+    "Mengambil daging dari toko lalu menaruhnya ke slot kosong kulkas."
 )
 
 -- AKSI MANUAL & RESET
 API.Section(KulkasTab, "Aksi Manual")
-API.Button(KulkasTab, "Isi Semua Kulkas Minuman & Daging (1x)", function()
+API.Button(KulkasTab, "Isi Semua Kulkas Sekarang", function()
     jalankanSiklusKulkas(true)
 end)
 
-API.Button(KulkasTab, "Reset Cache & Refresh Lisensi", function()
+API.Button(KulkasTab, "Refresh Daftar & Atur Ulang", function()
     slotDitolakServer = {}
     kardusDitolakSementara = {}
     percobaanGagalTangan = 0
     muatSemuaDaftarProduk()
     local adaYangAktif = autoMinumanEnabled or autoDagingEnabled
-    perbaruiStatusUI(adaYangAktif and "Siaga (Event-Driven Aktif)" or "Nonaktif")
-    API.Notify("Direset", "Daftar Lisensi Minuman & Daging diperbarui.", 2)
+    perbaruiStatusUI(adaYangAktif and "Siaga (Aktif)" or "Nonaktif")
+    API.Notify("Diperbarui", "Daftar produk Minuman & Daging diperbarui.", 2)
 end)
 
 perbaruiStatusUI("Nonaktif")

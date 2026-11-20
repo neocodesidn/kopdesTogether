@@ -508,7 +508,7 @@ end)
 -- ==========================================
 -- UI TAB: SAYURAN
 -- ==========================================
-local SayuranTab = API.CreateTab("[RESTOCK] Sayuran")
+local SayuranTab = API.CreateTab("Sayuran")
 
 API.Section(SayuranTab, "Status Rak Sayuran (" .. PlotToko.Name .. ")")
 StatusSayuranCard = API.Paragraph(

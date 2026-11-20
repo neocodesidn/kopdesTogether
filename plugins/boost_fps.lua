@@ -193,27 +193,27 @@ end
 local FpsTab = API.CreateTab("Boost FPS")
 
 -- FITUR 1: HIDE NPC PEMBELI
-API.Section(FpsTab, "Hide NPC Pembeli")
+API.Section(FpsTab, "Sembunyikan NPC Pembeli")
 local StatusNpcCard = API.Paragraph(
     FpsTab,
-    "Status Hide NPC: Nonaktif",
+    "Status NPC Pembeli: Nonaktif",
     "NPC Pembeli tampil normal di layar."
 )
 
-API.Toggle(FpsTab, "Hide NPC Pembeli", false, function(val)
+API.Toggle(FpsTab, "Sembunyikan NPC Pembeli", false, function(val)
     hideNpcEnabled = val
     local total = prosesSeluruhNPC(val)
     API.SetElementText(
         StatusNpcCard,
-        val and ("Status Hide NPC: Aktif (" .. tostring(total) .. " NPC)") or "Status Hide NPC: Nonaktif",
+        val and ("Status NPC Pembeli: Aktif (" .. tostring(total) .. " NPC)") or "Status NPC Pembeli: Nonaktif",
         val and "Seluruh model & efek NPC baru otomatis disembunyikan." or "Tampilan NPC Pembeli dikembalikan seperti semula."
     )
 end)
 
 API.Paragraph(
     FpsTab,
-    "Penjelasan Hide NPC Pembeli",
-    "Menyembunyikan seluruh tubuh, aksesoris, bayangan, dan indikator di atas kepala NPC_Pembeli di sisi client agar FPS naik tanpa mengganggu transaksi kasir."
+    "Penjelasan Sembunyikan NPC Pembeli",
+    "Menyembunyikan seluruh tubuh, aksesoris, bayangan, dan tanda di atas kepala NPC Pembeli di pihak pemain supaya transaksi kasir tidak terganggu dan game berjalan lebih ringan."
 )
 
 -- FITUR 2: ULTRA FPS BOOST
@@ -235,16 +235,16 @@ end)
 API.Paragraph(
     FpsTab,
     "Penjelasan Ultra FPS Boost",
-    "Mematikan GlobalShadows, efek pencahayaan, partikel koin/EXP, serta mengubah material seluruh part menjadi SmoothPlastic untuk meringankan beban GPU dan RAM."
+    "Mematikan bayangan, efek cahaya, partikel koin/pengalaman, dan menyederhanakan permukaan objek supaya perangkat lebih ringan."
 )
 
 -- FITUR 3: HIDE PLOT PEMAIN LAIN
 API.Section(FpsTab, "Sembunyikan Toko Pemain Lain")
-API.Toggle(FpsTab, "Hide Plot Pemain Lain", false, function(val)
+API.Toggle(FpsTab, "Sembunyikan Toko Pemain Lain", false, function(val)
     hideOtherPlotsEnabled = val
     local totalPlot = prosesPlotPemainLain(val)
     API.Notify(
-        val and "Plot Lain Disembunyikan" or "Plot Lain Ditampilkan",
+        val and "Toko Lain Disembunyikan" or "Toko Lain Ditampilkan",
         tostring(totalPlot) .. " plot pemain lain " .. (val and "disembunyikan." or "dikembalikan."),
         2
     )
@@ -252,6 +252,6 @@ end)
 
 API.Paragraph(
     FpsTab,
-    "Penjelasan Hide Plot Lain",
-    "Menyembunyikan seluruh rak, kardus, dan dekorasi milik pemain lain di server ini agar perangkat hanya merender toko milik kamu (" .. (PlotSendiri and PlotSendiri.Name or "Plot1") .. ")."
+    "Penjelasan Sembunyikan Toko Lain",
+    "Menyembunyikan seluruh rak, kardus, dan dekorasi milik pemain lain supaya hanya toko kamu yang ditampilkan."
 )

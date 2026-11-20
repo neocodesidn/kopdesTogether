@@ -189,7 +189,7 @@ local function prosesSimpanGudang(sekaliJalan)
         while (sekaliJalan or autoGudangEnabled) do
             local daftarSlot = dapatkanDaftarSlotGudang(true)
             if #daftarSlot == 0 then
-                updateTeksStatus("Semua slot ditandai penuh (Reset Cache jika sudah kosong)")
+                updateTeksStatus("Semua slot sudah penuh (Refresh jika seharusnya kosong)")
                 break
             end
 
@@ -203,8 +203,11 @@ local function prosesSimpanGudang(sekaliJalan)
 
             -- Coba taruh ke slot acak sampai diterima server (tidak ditolak)
             local masuk = false
-            for _, targetSlot in ipairs(daftarSlot) do
+            local urutanSlot = 1
+            while urutanSlot <= #daftarSlot do
                 if not (sekaliJalan or autoGudangEnabled) then break end
+                local targetSlot = daftarSlot[urutanSlot]
+                urutanSlot = urutanSlot + 1
                 if not cariKardusDiTangan() then
                     masuk = true
                     break
@@ -217,15 +220,13 @@ local function prosesSimpanGudang(sekaliJalan)
                 task.wait(0.15)
 
                 -- Jika ditolak server ("❌ Slot rak sudah terisi!"), lanjut ke slot berikutnya
-                if adaTolakanTerakhir then
-                    continue
-                end
-
-                -- Jika kardus sudah lepas dari tangan, berarti berhasil masuk
-                if not cariKardusDiTangan() then
-                    masuk = true
-                    berhasilSimpan = berhasilSimpan + 1
-                    break
+                if not adaTolakanTerakhir then
+                    -- Jika kardus sudah lepas dari tangan, berarti berhasil masuk
+                    if not cariKardusDiTangan() then
+                        masuk = true
+                        berhasilSimpan = berhasilSimpan + 1
+                        break
+                    end
                 end
             end
 
@@ -270,7 +271,7 @@ API.Section(GudangTab, "Auto Simpan Gudang (" .. PlotToko.Name .. ")")
 StatusGudangCard = API.Paragraph(
     GudangTab,
     "Kardus di Lantai: 0",
-    "Status: Nonaktif (Mode Random & Event-Driven Anti-Lag)"
+    "Status: Nonaktif (Mode Acak & Otomatis)"
 )
 
 API.Slider(GudangTab, "Jeda Antar Kardus (Detik)", 0.15, 1.50, 0.05, " dtk", 0.25, function(val)
@@ -280,7 +281,7 @@ end)
 API.Toggle(GudangTab, "Auto Simpan Kardus ke Gudang", false, function(val)
     autoGudangEnabled = val
     if val then
-        API.Notify("Auto Gudang Aktif", "Mengambil kardus random & menaruh ke RakPenyimpananX.", 2)
+        API.Notify("Auto Gudang Aktif", "Mengambil kardus dari lantai & menaruhnya ke rak penyimpanan.", 2)
         prosesSimpanGudang(false)
     else
         API.Notify("Auto Gudang Mati", "Auto simpan gudang dihentikan.", 2)
@@ -292,9 +293,9 @@ API.Button(GudangTab, "Simpan Semua Kardus Sekarang (1x)", function()
     prosesSimpanGudang(true)
 end)
 
-API.Button(GudangTab, "Reset Cache Slot Penuh", function()
+API.Button(GudangTab, "Refresh Rak Gudang", function()
     slotPenuhCache = {}
-    API.Notify("Cache Direset", "Semua slot RakPenyimpananX siap dicoba ulang.", 2)
+    API.Notify("Refresh Rak Gudang", "Semua slot penyimpanan sudah bisa dipakai lagi.", 2)
     if autoGudangEnabled then
         prosesSimpanGudang(false)
     end

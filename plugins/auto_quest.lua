@@ -2,7 +2,8 @@ local API = ...
 
 local GetQuestsRemote = API.Remotes.Quest:WaitForChild("GetQuests")
 local ClaimQuestRemote = API.Remotes.Quest:WaitForChild("ClaimQuest")
-local QuestUpdatedEvent = API.Remotes.Quest:FindFirstChild("QuestUpdated")
+local QuestRemotes = API.Remotes and API.Remotes.Quest
+local QuestUpdatedEvent = QuestRemotes and QuestRemotes:FindFirstChild("QuestUpdated")
 
 local autoClaimQuestEnabled = false
 local sedangProsesQuest = false
@@ -54,9 +55,9 @@ local function cekDanClaimQuests(isManual)
     end)
 
     if berhasilClaim > 0 then
-        API.Notify("Quest Di-Claim!", "Mengambil hadiah dari " .. berhasilClaim .. " tugas selesai.", 4)
+        API.Notify("Misi Selesai Diambil!", "Mengambil hadiah dari " .. berhasilClaim .. " tugas selesai.", 4)
     elseif isManual then
-        API.Notify("Info Quest", "Belum ada tugas sampingan yang siap di-claim.", 3)
+        API.Notify("Info Quest", "Belum ada misi tambahan yang siap diambil.", 3)
     end
 
     sedangProsesQuest = false
@@ -72,19 +73,19 @@ end
 
 -- UI Tab Quest
 local QuestTab = API.CreateTab("Quest")
-API.Section(QuestTab, "Otomatisasi Tugas Sampingan")
+API.Section(QuestTab, "Misi Otomatis")
 
-API.Toggle(QuestTab, "Auto Claim Quest Selesai", false, function(val)
+API.Toggle(QuestTab, "Auto Klaim Misi yang Sudah Selesai", false, function(val)
     autoClaimQuestEnabled = val
     if val then task.spawn(cekDanClaimQuests, false) end
     API.Notify(
-        val and "Auto Quest Aktif" or "Auto Quest Mati",
-        val and "Hadiah misi otomatis di-claim saat selesai." or "Auto claim dihentikan.",
+        val and "Misi Otomatis Aktif" or "Misi Otomatis Dimatikan",
+        val and "Misi yang sudah selesai otomatis diambil." or "Mekanisme auto misi dimatikan.",
         3
     )
 end)
 
-API.Button(QuestTab, "Cek & Claim Semua Quest Sekarang", function()
+API.Button(QuestTab, "Cek & Ambil Semua Misi Sekarang", function()
     task.spawn(cekDanClaimQuests, true)
 end)
 

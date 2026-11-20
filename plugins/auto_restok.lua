@@ -76,7 +76,7 @@ end
 -- ==========================================
 -- UI TAB: [AUTO BUY] KARDUS
 -- ==========================================
-local ShopTab = API.CreateTab("[AUTO BUY] Kardus")
+local ShopTab = API.CreateTab("Auto Beli Kardus")
 
 API.Section(ShopTab, "Pengaturan Produk")
 

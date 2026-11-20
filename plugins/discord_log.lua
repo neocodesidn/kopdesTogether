@@ -75,7 +75,7 @@ end)
 
 -- UI Tab Webhook
 local WebhookTab = API.CreateTab("Webhook")
-API.Section(WebhookTab, "Discord Components V2 (Tanpa Accent Color)")
+API.Section(WebhookTab, "Notifikasi ke Discord")
 
 API.Input(WebhookTab, "URL Webhook Discord (Tekan Enter)", "https://discord.com/api/webhooks/...", function(txt)
     webhookUrl = txt
@@ -88,11 +88,11 @@ API.Toggle(WebhookTab, "Kirim Slip Gaji ke Discord", false, function(val)
     webhookEnabled = val
 end)
 
-API.Button(WebhookTab, "Test Kirim Webhook V2", function()
+API.Button(WebhookTab, "Tes Pesan ke Discord", function()
     task.spawn(function()
         local ok, info = kirimWebhookV2(
             "Test Koneksi Koperasi",
-            "**Status:** Rayfield Gen 2 + Modular Plugin aktif.\n**Toko:** Plot1",
+            "**Status:** Sistem Payroll Kopdes aktif.\n**Toko:** Plot kamu",
             "Test Notifikasi • Kopdes Together"
         )
         API.Notify(ok and "Webhook Terkirim!" or "Webhook Gagal", info, 3)

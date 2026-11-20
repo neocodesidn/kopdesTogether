@@ -69,8 +69,8 @@ local function cekDanClaimQuest(dariTombolManual)
                     local jenisHadiah = (q.def and q.def.reward and q.def.reward.kind) or "Hadiah"
                     local nominalHadiah = (q.def and q.def.reward and tostring(q.def.reward.amount)) or ""
                     API.Notify(
-                        "Quest Diklaim!",
-                        "Berhasil klaim " .. nominalHadiah .. " " .. jenisHadiah .. ".",
+                        "Misi Selesai Diambil!",
+                        "Berhasil mengambil hadiah " .. nominalHadiah .. " " .. jenisHadiah .. ".",
                         2
                     )
                     task.wait(0.15)
@@ -80,7 +80,7 @@ local function cekDanClaimQuest(dariTombolManual)
     end
 
     local statusTeks = autoQuestEnabled
-        and "Status: Event-Driven Aktif (0% CPU saat idle)"
+        and "Status: Otomatis Aktif"
         or "Status: Nonaktif"
 
     perbaruiStatusUI(
@@ -161,22 +161,22 @@ end
 -- ==========================================
 local QuestTab = API.CreateTab("Quest")
 
-API.Section(QuestTab, "Auto Claim Quest (Event-Driven Anti-Lag)")
+API.Section(QuestTab, "Auto Klaim Misi")
 StatusQuestCard = API.Paragraph(
     QuestTab,
     "Quest Aktif: -  |  Total Diklaim: 0",
-    "Status: Nonaktif (Hanya mengecek saat ada progres/notifikasi baru)"
+    "Status: Nonaktif (Menunggu notifikasi misi baru)"
 )
 
-API.Toggle(QuestTab, "Auto Claim Quest Otomatis", false, function(val)
+API.Toggle(QuestTab, "Auto Klaim Misi Otomatis", false, function(val)
     autoQuestEnabled = val
     if val then
-        API.Notify("Auto Quest Aktif", "Mengecek quest siap klaim & memantau perubahan secara otomatis.", 2)
+        API.Notify("Misi Otomatis Aktif", "Mengecek misi yang siap diambil & memantau perubahan secara otomatis.", 2)
         task.spawn(function()
             cekDanClaimQuest(false)
         end)
     else
-        API.Notify("Auto Quest Mati", "Auto claim quest dihentikan.", 2)
+        API.Notify("Misi Otomatis Dinonaktif", "Auto klaim misi dimatikan.", 2)
         perbaruiStatusUI(
             "Quest Aktif: -  |  Total Diklaim: " .. tostring(totalBerhasilClaim),
             "Status: Nonaktif"
@@ -184,7 +184,7 @@ API.Toggle(QuestTab, "Auto Claim Quest Otomatis", false, function(val)
     end
 end)
 
-API.Button(QuestTab, "Cek & Claim Quest Sekarang (1x)", function()
+API.Button(QuestTab, "Cek & Ambil Misi Sekarang (1x)", function()
     task.spawn(function()
         cekDanClaimQuest(true)
     end)

@@ -37,7 +37,7 @@ local OpsTab = API.CreateTab("Operasional")
 
 API.Section(OpsTab, "Auto Kasir & Boost Level Toko")
 
-API.Slider(OpsTab, "Jeda Loop Kasir (Detik)", 0.05, 2.0, 0.05, " dtk", 0.15, function(val)
+API.Slider(OpsTab, "Jeda Loop Kasir (Detik)", 0.05, 2.0, 0.05, " detik", 0.15, function(val)
     kasirDelay = tonumber(val) or 0.15
 end)
 
@@ -45,12 +45,12 @@ API.Toggle(OpsTab, "Auto Kasir / Boost Level", false, function(val)
     autoKasirEnabled = val
     API.Notify(
         val and "Auto Kasir Aktif" or "Auto Kasir Mati",
-        val and "Memproses transaksi kasir & EXP toko otomatis." or "Auto kasir dihentikan.",
+        val and "Memproses transaksi kasir dan pengalaman toko otomatis." or "Auto kasir dihentikan.",
         3
     )
 end)
 
-API.Toggle(OpsTab, "Turbo 2x Eksekusi (Dupe Boost)", false, function(val)
+API.Toggle(OpsTab, "Eksekusi 2x (Mode Cepat)", false, function(val)
     turboDoubleExec = val
 end)
 
@@ -67,7 +67,7 @@ end)
 
 API.Section(OpsTab, "Utilitas Pemain")
 
-API.Slider(OpsTab, "Kecepatan Jalan (Angkut Kardus)", 16, 120, 2, " Speed", 16, function(val)
+API.Slider(OpsTab, "Kecepatan Jalan (Angkut Kardus)", 16, 120, 2, "Kecepatan", 16, function(val)
     walkSpeedValue = tonumber(val) or 16
     local char = API.LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")

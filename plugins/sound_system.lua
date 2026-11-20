@@ -46,7 +46,7 @@ local function putarAudioRemote(audioId, silent)
     if sedangMemproses then return false end
     if not SoundSystemRemote then
         if not silent then
-            API.Notify("Remote Tidak Ditemukan", "SoundSystemRequest tidak ada di ReplicatedStorage.Remotes.", 4)
+            API.Notify("Remote Tidak Ditemukan", "Sistem suara tidak ditemukan.", 4)
         end
         return false
     end
@@ -132,7 +132,7 @@ StatusCard = API.Paragraph(
     "Masukkan Audio ID di bawah atau pilih dari Playlist Cepat."
 )
 
-API.Section(MusicTab, "Putar Lagu via Audio ID")
+API.Section(MusicTab, "Putar Lagu dengan Audio ID")
 API.Input(MusicTab, "Roblox Audio ID (Tekan Enter)", "136298946425465", function(txt)
     local angka = tonumber(tostring(txt):match("%d+"))
     if angka then
@@ -147,7 +147,7 @@ API.Button(MusicTab, "Cek & Putar Audio ID Sekarang", function()
     task.spawn(putarAudioRemote, inputAudioId, false)
 end)
 
-API.Section(MusicTab, "Playlist Cepat & Auto Replay")
+API.Section(MusicTab, "Playlist Cepat & Main Ulang")
 PlaylistDropdown = API.Dropdown(
     MusicTab,
     "Pilih Lagu Tersimpan",
@@ -162,11 +162,11 @@ PlaylistDropdown = API.Dropdown(
     end
 )
 
-API.Toggle(MusicTab, "Auto Replay Lagu Terakhir Saat Selesai", false, function(val)
+API.Toggle(MusicTab, "Main Ulang Otomatis", false, function(val)
     autoLoopAktif = val
     API.Notify(
-        val and "Auto Replay Aktif" or "Auto Replay Mati",
-        val and "Lagu terakhir otomatis diputar ulang saat durasinya habis." or "Auto replay dimatikan.",
+        val and "Main Ulang Aktif" or "Main Ulang Dinonaktif",
+        val and "Lagu terakhir akan diputar ulang sendiri saat selesai." or "Fitur main ulang dimatikan.",
         3
     )
 end)

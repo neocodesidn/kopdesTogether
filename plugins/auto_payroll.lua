@@ -186,7 +186,7 @@ end
 -- UI Tab Bank
 local BankTab = API.CreateTab("Bank")
 
-API.Section(BankTab, "Deposit Saldo User ke Toko (2x Tap)")
+API.Section(BankTab, "Setor Saldo ke Toko (Konfirmasi 2x Klik)")
 local DepositButton
 
 API.Dropdown(BankTab, "Pilih Nominal Deposit", {
@@ -209,7 +209,7 @@ DepositButton = API.Button(BankTab, "Setor 10 Juta ke Toko", function()
         local tokenSaatIni = tokenKonfirmasiDeposit
 
         API.SetElementText(DepositButton, "Tap Lagi untuk Konfirmasi Setor Rp " .. nominalDepositJuta .. " Juta")
-        API.Notify("Konfirmasi Deposit", "Tap tombol sekali lagi dalam 5 detik untuk setor.", 4)
+        API.Notify("Konfirmasi Deposit", "Tap tombol sekali lagi dalam 5 detik untuk konfirmasi setor " .. nominalDepositJuta .. " Juta ke Toko.", 4)
 
         task.delay(5, function()
             if konfirmasiDeposit and tokenKonfirmasiDeposit == tokenSaatIni then
