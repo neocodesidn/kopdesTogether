@@ -589,8 +589,8 @@ local KulkasTab = API.CreateTab("Kulkas")
 API.Section(KulkasTab, "Status Kulkas (" .. PlotToko.Name .. ")")
 StatusKulkasCard = API.Paragraph(
     KulkasTab,
-    "Minuman: -  |  Daging: -",
-    "Prioritas: Tidak ada  |  Status: Nonaktif"
+    "-" .. tostring(0) .. " Kardus",
+    tostring(0) .. " Kardus Tersederah"
 )
 
 API.Section(KulkasTab, "Pengaturan Umum")
