@@ -386,16 +386,16 @@ end
 -- ==========================================
 local StatusSayuranCard
 
-local function perbaruiStatusUI(teksStatus)
+local function perbaruiStatusUI()
     if not StatusSayuranCard then return end
 
-    local slotKosong, totalRak = cariSemuaSlotSayuranKosong()
+    local slotKosong = cariSemuaSlotSayuranKosong()
     local kardusSayuran = ambilDaftarKardusSayuran()
 
     API.SetElementText(
         StatusSayuranCard,
-        "-" .. tostring(#slotKosong) .. " Kardus",
-        tostring(#kardusSayuran) .. " Kardus Tersederah"
+        "Slot Kosong: " .. tostring(#slotKosong) .. "  |  Kardus Sayuran: " .. tostring(#kardusSayuran),
+        "Status: " .. (autoSayuranEnabled and "Aktif" or "Nonaktif")
     )
 end
 
@@ -441,8 +441,6 @@ local function jalankanSiklusSayuran(sekaliJalan)
 
                 if not picked or not namaProduk then break end
 
-                perbaruiStatusUI("Mengisi " .. namaProduk .. " ke " .. targetSlot.Parent.Parent.Name .. "." .. targetSlot.Name)
-
                 slotTerakhirDitembak = targetSlot
                 PlaceOilRemote:FireServer(targetSlot)
                 task.wait(0.12)
@@ -462,6 +460,7 @@ local function jalankanSiklusSayuran(sekaliJalan)
                 if terkonfirmasi then
                     terisiCount = terisiCount + 1
                     percobaanGagalTangan = 0
+                    perbaruiStatusUI()
                     task.wait(jedaAntarSlot)
                 else
                     slotDitolakServer[targetSlot] = tick() + 45
@@ -478,7 +477,7 @@ local function jalankanSiklusSayuran(sekaliJalan)
         end
 
         sedangMengisi = false
-        perbaruiStatusUI(autoSayuranEnabled and "Siaga (Aktif)" or "Nonaktif")
+        perbaruiStatusUI()
 
         if sekaliJalan then
             API.Notify("Selesai", "Berhasil mengisi " .. tostring(terisiCount) .. " slot Rak Sayuran.", 3)
@@ -492,7 +491,7 @@ end
 clickObject.ChildAdded:Connect(function(child)
     if child.Name == "Kardus" then
         task.wait(0.25)
-        perbaruiStatusUI(autoSayuranEnabled and "Kardus baru terdeteksi..." or "Nonaktif")
+        perbaruiStatusUI()
         if autoSayuranEnabled then
             jalankanSiklusSayuran(false)
         end
@@ -501,56 +500,55 @@ end)
 
 clickObject.ChildRemoved:Connect(function(child)
     if child.Name == "Kardus" and not sedangMengisi then
-        perbaruiStatusUI(autoSayuranEnabled and "Siaga (Aktif)" or "Nonaktif")
+        perbaruiStatusUI()
     end
 end)
 
 -- ==========================================
--- UI TAB: SAYURAN
+-- UI TAB: [RESTOCK] SAYURAN (RAPI & TO THE POINT)
 -- ==========================================
-local SayuranTab = API.CreateTab("Sayuran")
+local SayuranTab = API.CreateTab("[RESTOCK] Sayuran")
 
-API.Section(SayuranTab, "Status Rak Sayuran (" .. PlotToko.Name .. ")")
+-- 1. ATAS: DATA SLOT KOSONG & KARDUS SAYURAN TERSEDIA
 StatusSayuranCard = API.Paragraph(
     SayuranTab,
-    "Rak Sayuran: -  |  Kardus Sayuran: -",
+    "Slot Kosong: 0  |  Kardus Sayuran: 0",
     "Status: Nonaktif"
 )
 
-API.Section(SayuranTab, "Kontrol Auto Sayuran")
-API.Slider(SayuranTab, "Jeda Antar Slot (Detik)", 0.20, 1.50, 0.05, " detik", 0.30, function(val)
-    jedaAntarSlot = tonumber(val) or 0.30
-end)
+-- 2. TENGAH: PENJELASAN CARA PEMAKAIAN
+API.Paragraph(
+    SayuranTab,
+    "Cara Pemakaian",
+    "Aktifkan toggle di bawah agar kardus kategori Sayuran otomatis diambil dan ditata ke rak sayuran yang kosong."
+)
+
+-- 3. BAWAH: FITUR & KONTROL
+API.Section(SayuranTab, "Kontrol")
 
 API.Toggle(SayuranTab, "Auto Isi Rak Sayuran", false, function(val)
     autoSayuranEnabled = val
+    perbaruiStatusUI()
     if val then
-        API.Notify("Auto Sayuran Aktif", "Mengisi produk Sayuran ke rak penyimpanan.", 2)
         jalankanSiklusSayuran(false)
-    else
-        API.Notify("Auto Sayuran Mati", "Auto isi rak sayuran dihentikan.", 2)
-        perbaruiStatusUI("Nonaktif")
     end
 end)
 
-API.Paragraph(
-    SayuranTab,
-    "Penjelasan Auto Sayuran",
-    "Mengambil sayuran dari toko lalu menaruhnya ke rak penyimpanan kosong."
-)
+API.Slider(SayuranTab, "Jeda Antar Slot", 0.20, 1.50, 0.05, " dtk", 0.30, function(val)
+    jedaAntarSlot = tonumber(val) or 0.30
+end)
 
-API.Section(SayuranTab, "Aksi Manual")
-API.Button(SayuranTab, "Isi Semua Rak Sayuran Sekarang", function()
+API.Button(SayuranTab, "Isi Sekarang (1x)", function()
     jalankanSiklusSayuran(true)
 end)
 
-API.Button(SayuranTab, "Refresh Daftar & Atur Ulang", function()
+API.Button(SayuranTab, "Refresh Data", function()
     slotDitolakServer = {}
     kardusDitolakSementara = {}
     percobaanGagalTangan = 0
     muatDaftarSayuran()
-    perbaruiStatusUI(autoSayuranEnabled and "Siaga (Aktif)" or "Nonaktif")
-    API.Notify("Diperbarui", "Daftar produk Sayuran diperbarui.", 2)
+    perbaruiStatusUI()
+    API.Notify("Diperbarui", "Data slot dan kardus sayuran diperbarui.", 2)
 end)
 
-perbaruiStatusUI("Nonaktif")
+perbaruiStatusUI()
