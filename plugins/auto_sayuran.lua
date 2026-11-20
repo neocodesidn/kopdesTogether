@@ -394,8 +394,8 @@ local function perbaruiStatusUI(teksStatus)
 
     API.SetElementText(
         StatusSayuranCard,
-        "Rak Sayuran: " .. tostring(totalRak) .. " (" .. tostring(#slotKosong) .. " Slot Kosong)  |  Kardus Sayuran: " .. tostring(#kardusSayuran),
-        "Status: " .. teksStatus
+        "-" .. tostring(#slotKosong) .. " Kardus",
+        tostring(#kardusSayuran) .. " Kardus Tersederah"
     )
 end
 

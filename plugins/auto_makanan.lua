@@ -634,8 +634,8 @@ local function perbaruiStatusUI(teksCustom)
 
     API.SetElementText(
         StatusInputCard,
-        "Slot Kosong: " .. tostring(#slotKosong) .. "  |  Item Makanan: " .. tostring(#kardusMakanan),
-        teksStatus
+        "-" .. tostring(#slotKosong) .. " Kardus",
+        tostring(#kardusMakanan) .. " Kardus Tersederah"
     )
 end
 
@@ -761,8 +761,8 @@ local InputTab = API.CreateTab("Makanan")
 API.Section(InputTab, "Status Rak Makanan (" .. PlotToko.Name .. ")")
 StatusInputCard = API.Paragraph(
     InputTab,
-    "Slot Kosong: -  |  Item Makanan: -",
-    "Status: Nonaktif (Daftar Makanan: " .. tostring(totalItemMakanan) .. " item)"
+    "-" .. tostring(0) .. " Kardus",
+    tostring(totalItemMakanan) .. " Kardus Tersederah"
 )
 
 API.Section(InputTab, "Pengaturan Kecepatan")
