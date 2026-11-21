@@ -220,7 +220,7 @@ end
 -- ==========================================
 -- UI TAB: AUTO BELI KARDUS + SEARCH PRODUK
 -- ==========================================
-local ShopTab = API.CreateTab("Auto Beli Kardus")
+local ShopTab = API.CreateTab("[AUTO BUY] Kardus")
 
 local StatusBeliCard = API.Paragraph(
     ShopTab,
