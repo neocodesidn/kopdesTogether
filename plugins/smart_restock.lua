@@ -53,7 +53,7 @@ local LABEL_KATEGORI = {
     Sayuran = "Sayuran (Rak Sayuran)"
 }
 
-local databaseProduk = {} -- [keyNormalisasi] = { canonicalName, kategori, model, harga }
+local databaseProduk = {}
 local daftarOpsiDropdown = {
     Makanan = {},
     Minuman = {},
@@ -170,13 +170,16 @@ end
 muatSemuaDatabaseProduk()
 
 -- ==========================================
--- STATE KONFIGURASI UNIFIED (1 TAB: BELI + RESTOCK)
+-- STATE KONFIGURASI UNIFIED
 -- ==========================================
 local KAPASITAS_MAKS_SLOT = 12
+local MAX_KARDUS_PER_PRODUK = 10
+local MAX_TOTAL_KARDUS_LANTAI = 20
+
 local autoRestockEnabled = false
 local autoBeliEnabled = false
 local jedaAntarSlot = 0.25
-local jumlahBeliPerKategori = 5
+local jumlahBeliPerProduk = 10
 local sedangMengisi = false
 
 local waktuBeliTerakhir = { Makanan = 0, Minuman = 0, Daging = 0, Sayuran = 0 }
@@ -193,14 +196,6 @@ local produkTerpilih = {
     Minuman = daftarOpsiDropdown.Minuman[1],
     Daging = daftarOpsiDropdown.Daging[1],
     Sayuran = daftarOpsiDropdown.Sayuran[1]
-}
-
--- Menyimpan status apakah rak kategori tsb benar-benar ada di plot
-local rakTersediaDiToko = {
-    Makanan = false,
-    Minuman = false,
-    Daging = false,
-    Sayuran = false
 }
 
 local slotDitolakServer = {}
@@ -364,23 +359,66 @@ local function bacaInfoKardus(objKardus)
 end
 
 -- ==========================================
--- PEMINDAIAN RAK YANG TERSEDIA, SLOT KOSONG, & KARDUS LANTAI
+-- PENGECEKAN KETAT SLOT BENAR-BENAR KOSONG (ANTI-FALSE EMPTY)
 -- ==========================================
 local function dapatkanFolderItemSlot(rakPart)
-    return rakPart:FindFirstChild("ClientItemInstances")
+    local f = rakPart:FindFirstChild("ClientItemInstances")
         or rakPart:FindFirstChild("InstacesItem")
         or rakPart:FindFirstChild("InstanceItem")
+    if f then return f end
+
+    for _, child in ipairs(rakPart:GetChildren()) do
+        if child:IsA("Folder") then
+            local nLower = child.Name:lower()
+            if nLower:find("item") or nLower:find("instance") or nLower:find("product") or nLower:find("produk") then
+                return child
+            end
+        end
+    end
+    return nil
 end
 
 local function apakahSlotKosong(rakPart)
     if not rakPart or not rakPart:IsA("BasePart") then return false end
+
+    -- 1. Cek jika server baru saja menolak slot ini
     if slotDitolakServer[rakPart] and tick() < slotDitolakServer[rakPart] then
         return false
     end
+
+    -- 2. Cek folder item di dalam slot
     local folderItem = dapatkanFolderItemSlot(rakPart)
     if folderItem and #folderItem:GetChildren() > 0 then
         return false
     end
+
+    -- 3. Cek atribut stok/isi pada slot
+    for _, attr in ipairs({ "Stock", "Jumlah", "Count", "Isi", "Amount", "Qty", "Occupied", "Terisi", "Full" }) do
+        local v = rakPart:GetAttribute(attr)
+        if typeof(v) == "number" and v > 0 then
+            return false
+        elseif typeof(v) == "boolean" and v == true then
+            return false
+        end
+    end
+
+    -- 4. Cek child langsung di dalam slot (selain ClickDetector / ProximityPrompt / GUI / Attachment / Weld)
+    for _, child in ipairs(rakPart:GetChildren()) do
+        if child:IsA("BasePart") or child:IsA("Model") or child:IsA("Tool") then
+            return false
+        elseif (child:IsA("IntValue") or child:IsA("NumberValue")) then
+            local nLower = child.Name:lower()
+            if (nLower:find("stock") or nLower:find("jumlah") or nLower:find("isi") or nLower:find("count")) and child.Value > 0 then
+                return false
+            end
+        elseif child:IsA("StringValue") then
+            local nLower = child.Name:lower()
+            if (nLower:find("item") or nLower:find("product") or nLower:find("produk")) and child.Value ~= "" then
+                return false
+            end
+        end
+    end
+
     return true
 end
 
@@ -400,12 +438,23 @@ local function identifikasiModelRak(modelRak)
     return nil, nil
 end
 
+local function cariKardusPickedDiKarakter()
+    local char = API.LocalPlayer.Character
+    if not char then return nil end
+    local upperTorso = char:FindFirstChild("UpperTorso")
+    if upperTorso then
+        local p = upperTorso:FindFirstChild("KardusPicked")
+        if p then return p end
+    end
+    return char:FindFirstChild("KardusPicked", true)
+end
+
 local function pindaiSemuaDataToko()
     local rakAda = { Makanan = false, Minuman = false, Daging = false, Sayuran = false }
     local slotPerKategori = { Makanan = {}, Minuman = {}, Daging = {}, Sayuran = {} }
     local kardusLantaiPerKat = { Makanan = 0, Minuman = 0, Daging = 0, Sayuran = 0 }
     local daftarKandidatIsi = {}
-    local totalKardusAktif = 0
+    local totalSemuaKardusLantai = 0
 
     local daftarModel = {}
     for _, child in ipairs(clickObject:GetChildren()) do
@@ -435,14 +484,16 @@ local function pindaiSemuaDataToko()
         end
     end
 
+    -- Hitung kardus di lantai
     for _, v in ipairs(clickObject:GetChildren()) do
         if v.Name == "Kardus" and not apakahKardusDiRakGudang(v) then
+            totalSemuaKardusLantai = totalSemuaKardusLantai + 1
             local info, jumlah = bacaInfoKardus(v)
             if info and rakAda[info.kategori] then
                 kardusLantaiPerKat[info.kategori] = kardusLantaiPerKat[info.kategori] + 1
                 if kategoriAktif[info.kategori] then
-                    totalKardusAktif = totalKardusAktif + 1
                     local skip = kardusDitolakSementara[v] and tick() < kardusDitolakSementara[v]
+                    -- HANYA masukkan ke antrian isi jika slot kosong kategori tsb BENAR-BENAR > 0
                     if not skip and #slotPerKategori[info.kategori] > 0 then
                         table.insert(daftarKandidatIsi, {
                             obj = v,
@@ -456,7 +507,16 @@ local function pindaiSemuaDataToko()
         end
     end
 
-    return rakAda, slotPerKategori, kardusLantaiPerKat, daftarKandidatIsi, totalKardusAktif
+    -- Ikut hitung kardus yang sedang dipegang di tangan supaya tidak double-buy saat transisi
+    local pickedTangan = cariKardusPickedDiKarakter()
+    if pickedTangan then
+        local infoTangan = bacaInfoKardus(pickedTangan)
+        if infoTangan and kardusLantaiPerKat[infoTangan.kategori] ~= nil then
+            kardusLantaiPerKat[infoTangan.kategori] = kardusLantaiPerKat[infoTangan.kategori] + 1
+        end
+    end
+
+    return rakAda, slotPerKategori, kardusLantaiPerKat, daftarKandidatIsi, totalSemuaKardusLantai
 end
 
 -- ==========================================
@@ -544,17 +604,6 @@ end
 -- ==========================================
 -- PENGAMBILAN JARAK JAUH & ANTI-STUCK TANGAN
 -- ==========================================
-local function cariKardusPickedDiKarakter()
-    local char = API.LocalPlayer.Character
-    if not char then return nil end
-    local upperTorso = char:FindFirstChild("UpperTorso")
-    if upperTorso then
-        local p = upperTorso:FindFirstChild("KardusPicked")
-        if p then return p end
-    end
-    return char:FindFirstChild("KardusPicked", true)
-end
-
 local function lepasKardusDiTangan()
     local picked = cariKardusPickedDiKarakter()
     if not picked then
@@ -632,7 +681,7 @@ local function ambilSatuKardus(detailKardus)
 end
 
 -- ==========================================
--- EKSEKUSI AUTO RESTOCK UNIFIED
+-- EKSEKUSI AUTO RESTOCK UNIFIED (BERHENTI TOTAL JIKA PENUH)
 -- ==========================================
 local function jalankanSiklusRestockAll(sekaliJalan)
     if sedangMengisi then return end
@@ -651,12 +700,14 @@ local function jalankanSiklusRestockAll(sekaliJalan)
 
                 if picked then
                     local infoTangan, jmlTangan = bacaInfoKardus(picked)
+                    -- Jika kategori dari kardus di tangan slotnya sudah 0 (PENUH), langsung jatuhkan dan berhenti mengambil
                     if not infoTangan
                         or not rakAda[infoTangan.kategori]
                         or not kategoriAktif[infoTangan.kategori]
                         or #slotPerKat[infoTangan.kategori] == 0 then
                         lepasKardusDiTangan()
                         task.wait(0.15)
+                        if #daftarKandidat == 0 then break end
                         continue
                     end
                     itemNama = infoTangan.canonicalName
@@ -665,11 +716,17 @@ local function jalankanSiklusRestockAll(sekaliJalan)
                     pcall(function() PickupKardusRemote:FireServer(picked, itemNama) end)
                     task.wait(0.06)
                 else
+                    -- Jika tidak ada slot kosong untuk kategori yang punya kardus, berhenti total
                     if #daftarKandidat == 0 then
                         break
                     end
 
                     local pilihan = daftarKandidat[1]
+                    -- Validasi ulang slot kosong tepat sebelum mengambil kardus
+                    if #slotPerKat[pilihan.kategori] == 0 then
+                        continue
+                    end
+
                     picked = ambilSatuKardus(pilihan)
                     if not picked then
                         continue
@@ -681,7 +738,7 @@ local function jalankanSiklusRestockAll(sekaliJalan)
 
                 local daftarSlotTarget = slotPerKat[kategoriAktifName]
                 local targetSlot = daftarSlotTarget and daftarSlotTarget[1]
-                if not targetSlot or not targetSlot.Parent then
+                if not targetSlot or not targetSlot.Parent or not apakahSlotKosong(targetSlot) then
                     continue
                 end
 
@@ -729,28 +786,28 @@ end
 
 -- ==========================================
 -- UI TUNGGAL TERPADU (SMART RESTOCK: BELI + ISI RAK)
--- Hanya menampilkan kategori yang raknya ADA di toko!
 -- ==========================================
 local SmartTab = API.CreateTab("Smart Restock")
 
 local StatusCard = API.Paragraph(
     SmartTab,
     "Memindai rak toko...",
-    "Auto Restock: Nonaktif  |  Auto Beli: Nonaktif"
+    "Kardus Lantai: 0/20  |  Restock: Nonaktif  |  Beli: Nonaktif"
 )
 
 local lastStatusUI = ""
 
-local function perbaruiStatusUI(rakAda, slotPerKat, kardusLantaiPerKat)
+local function perbaruiStatusUI(rakAda, slotPerKat, kardusLantaiPerKat, totalSemuaKardusLantai)
     local bagianRak = {}
     local namaSingkat = { Makanan = "Makanan", Minuman = "Minuman", Daging = "Daging", Sayuran = "Sayur" }
 
     for _, kat in ipairs(KATEGORI_LIST) do
         if rakAda[kat] then
+            local jmlSlot = #slotPerKat[kat]
             table.insert(bagianRak, string.format(
-                "%s: %d slot (%d kardus)",
+                "%s: %s (%d kardus)",
                 namaSingkat[kat],
-                #slotPerKat[kat],
+                jmlSlot > 0 and (tostring(jmlSlot) .. " kosong") or "PENUH",
                 kardusLantaiPerKat[kat]
             ))
         end
@@ -761,7 +818,9 @@ local function perbaruiStatusUI(rakAda, slotPerKat, kardusLantaiPerKat)
         or "Belum ada rak produk terpasang di toko."
 
     local sub = string.format(
-        "Auto Restock: %s  |  Auto Beli: %s",
+        "Kardus Lantai: %d/%d  |  Restock: %s  |  Beli: %s",
+        totalSemuaKardusLantai or 0,
+        MAX_TOTAL_KARDUS_LANTAI,
         autoRestockEnabled and "Aktif" or "Nonaktif",
         autoBeliEnabled and "Aktif" or "Nonaktif"
     )
@@ -783,7 +842,7 @@ API.Toggle(SmartTab, "Auto Isi Rak (Restock Otomatis)", false, function(val)
     end
 end)
 
-API.Toggle(SmartTab, "Auto Beli Kardus (Saat Lantai Habis & Rak Kosong)", false, function(val)
+API.Toggle(SmartTab, "Auto Beli Kardus (Hanya Saat Ada Slot Kosong)", false, function(val)
     autoBeliEnabled = val
     lastStatusUI = ""
     if val then
@@ -791,8 +850,8 @@ API.Toggle(SmartTab, "Auto Beli Kardus (Saat Lantai Habis & Rak Kosong)", false,
     end
 end)
 
-API.Slider(SmartTab, "Jumlah Sekali Beli (Max 10)", 1, 10, 1, " Kardus", 5, function(val)
-    jumlahBeliPerKategori = math.clamp(math.floor(tonumber(val) or 5), 1, 10)
+API.Slider(SmartTab, "Jumlah Beli Per Produk (Max 10)", 1, 10, 1, " Kardus", 10, function(val)
+    jumlahBeliPerProduk = math.clamp(math.floor(tonumber(val) or 10), 1, MAX_KARDUS_PER_PRODUK)
 end)
 
 API.Slider(SmartTab, "Jeda Antar Slot Restock", 0.20, 1.50, 0.05, " dtk", 0.25, function(val)
@@ -813,7 +872,6 @@ local function renderKategoriJikaRakAda(rakAda)
     for _, kat in ipairs(KATEGORI_LIST) do
         if rakAda[kat] and not kategoriSudahDirender[kat] then
             kategoriSudahDirender[kat] = true
-            rakTersediaDiToko[kat] = true
 
             API.Section(SmartTab, "Kategori: " .. LABEL_KATEGORI[kat])
 
@@ -832,10 +890,9 @@ local function renderKategoriJikaRakAda(rakAda)
     end
 end
 
--- Pemindaian awal saat skrip dijalankan
-local rakAwal, slotAwal, kardusAwal = pindaiSemuaDataToko()
+local rakAwal, slotAwal, kardusAwal, _, totalKardusAwal = pindaiSemuaDataToko()
 renderKategoriJikaRakAda(rakAwal)
-perbaruiStatusUI(rakAwal, slotAwal, kardusAwal)
+perbaruiStatusUI(rakAwal, slotAwal, kardusAwal, totalKardusAwal)
 
 API.Section(SmartTab, "Aksi Manual")
 
@@ -850,9 +907,9 @@ API.Button(SmartTab, "Refresh Rak & Lisensi Produk", function()
     lastStatusUI = ""
     muatSemuaDatabaseProduk()
     muatUlangCacheGudang()
-    local rakBaru, slotBaru, kardusBaru = pindaiSemuaDataToko()
+    local rakBaru, slotBaru, kardusBaru, _, totalKardusBaru = pindaiSemuaDataToko()
     renderKategoriJikaRakAda(rakBaru)
-    perbaruiStatusUI(rakBaru, slotBaru, kardusBaru)
+    perbaruiStatusUI(rakBaru, slotBaru, kardusBaru, totalKardusBaru)
     API.Notify("Diperbarui", "Data rak terpasang & lisensi produk berhasil diperbarui.", 2)
 end)
 
@@ -905,53 +962,75 @@ clickObject.ChildAdded:Connect(function(child)
 end)
 
 -- ==========================================
--- LOOP SINKRONISASI TERPADU (0.45 DETIK, 0% LAG)
+-- LOOP SINKRONISASI TERPADU (STOP TOTAL SAAT RAK PENUH)
 -- ==========================================
 muatUlangCacheGudang()
 
 task.spawn(function()
     while true do
-        local rakAda, slotPerKat, kardusLantaiPerKat, daftarKandidatIsi = pindaiSemuaDataToko()
+        local rakAda, slotPerKat, kardusLantaiPerKat, daftarKandidatIsi, totalSemuaKardusLantai = pindaiSemuaDataToko()
         renderKategoriJikaRakAda(rakAda)
-        perbaruiStatusUI(rakAda, slotPerKat, kardusLantaiPerKat)
+        perbaruiStatusUI(rakAda, slotPerKat, kardusLantaiPerKat, totalSemuaKardusLantai)
 
-        -- 1. Trigger Auto Restock
+        -- 1. Trigger Auto Restock (Hanya jalan jika ada slot kosong yang cocok dengan kardus di lantai)
         if autoRestockEnabled and not sedangMengisi and #daftarKandidatIsi > 0 then
             jalankanSiklusRestockAll(false)
         end
 
-        -- 2. Trigger Auto Beli (Hanya untuk kategori yang raknya ADA, kosong, dan kardusnya habis)
+        -- 2. Trigger Auto Beli (Hanya beli jika kebutuhan bersih = slotKosong - kardusTersedia > 0)
         if autoBeliEnabled and BeliProductRemote then
-            local batchBeli = {}
-            local sekarang = tick()
-            local jumlahKirim = math.clamp(jumlahBeliPerKategori, 1, 10)
+            local sisaKuotaLantai = MAX_TOTAL_KARDUS_LANTAI - totalSemuaKardusLantai
 
-            for _, kat in ipairs(KATEGORI_LIST) do
-                local namaTarget = produkTerpilih[kat]
-                if rakAda[kat]
-                    and kategoriAktif[kat]
-                    and namaTarget
-                    and namaTarget ~= ""
-                    and namaTarget ~= "Tidak Ada Produk"
-                    and kardusLantaiPerKat[kat] == 0
-                    and #slotPerKat[kat] > 0
-                    and (sekarang - waktuBeliTerakhir[kat]) >= 3.5 then
+            if sisaKuotaLantai > 0 then
+                local batchBeli = {}
+                local sudahDipakaiItem = {}
+                local sekarang = tick()
+                local targetPerProduk = math.clamp(jumlahBeliPerProduk, 1, MAX_KARDUS_PER_PRODUK)
 
-                    waktuBeliTerakhir[kat] = sekarang
-                    table.insert(batchBeli, {
-                        jumlahKardus = jumlahKirim,
-                        itemName = namaTarget
-                    })
+                for _, kat in ipairs(KATEGORI_LIST) do
+                    if sisaKuotaLantai <= 0 then break end
+
+                    local namaTarget = produkTerpilih[kat]
+                    local keyProduk = namaTarget and normalisasiTeks(namaTarget) or ""
+                    local jumlahSlotKosong = #slotPerKat[kat]
+                    local jumlahKardusAda = kardusLantaiPerKat[kat]
+
+                    -- Kebutuhan bersih = slot yang benar-benar kosong dikurangi kardus yang sudah ada di lantai/tangan
+                    local kebutuhanBersih = jumlahSlotKosong - jumlahKardusAda
+
+                    if rakAda[kat]
+                        and kategoriAktif[kat]
+                        and namaTarget
+                        and namaTarget ~= ""
+                        and namaTarget ~= "Tidak Ada Produk"
+                        and not sudahDipakaiItem[keyProduk]
+                        and jumlahSlotKosong > 0
+                        and kebutuhanBersih > 0
+                        and (sekarang - waktuBeliTerakhir[kat]) >= 3.5 then
+
+                        local jumlahKirim = math.min(targetPerProduk, MAX_KARDUS_PER_PRODUK, kebutuhanBersih, sisaKuotaLantai)
+
+                        if jumlahKirim >= 1 then
+                            sudahDipakaiItem[keyProduk] = true
+                            waktuBeliTerakhir[kat] = sekarang
+                            sisaKuotaLantai = sisaKuotaLantai - jumlahKirim
+
+                            table.insert(batchBeli, {
+                                jumlahKardus = jumlahKirim,
+                                itemName = namaTarget
+                            })
+                        end
+                    end
                 end
-            end
 
-            if #batchBeli > 0 then
-                BeliProductRemote:FireServer(batchBeli)
-                local daftarNama = {}
-                for _, b in ipairs(batchBeli) do
-                    table.insert(daftarNama, b.itemName .. " (" .. b.jumlahKardus .. "x)")
+                if #batchBeli > 0 then
+                    BeliProductRemote:FireServer(batchBeli)
+                    local daftarNama = {}
+                    for _, b in ipairs(batchBeli) do
+                        table.insert(daftarNama, b.itemName .. " (" .. b.jumlahKardus .. "x)")
+                    end
+                    API.Notify("Auto Beli Berhasil", "Membeli: " .. table.concat(daftarNama, ", "), 3)
                 end
-                API.Notify("Auto Beli Berhasil", "Membeli: " .. table.concat(daftarNama, ", "), 3)
             end
         end
 
