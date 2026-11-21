@@ -16,7 +16,7 @@ local CustomUI = loadstring(game:HttpGet(REPO_BASE .. "core/ui.lua?t=" .. tostri
 
 local DaftarPlugin = {
     --{ id = "smart_restock", name = "Smart Restock",                 file = "smart_restock.lua" },
-    { id = "restok",        name = "[AUTO BUY] Kardus",             file = "auto_restokv2.lua" },
+    { id = "restok",        name = "[AUTO BUY] Kardus",             file = "auto_restockv2.lua" },
     { id = "input",         name = "[RESTOCK] Makanan",             file = "auto_makanan.lua" },
     { id = "kulkas",        name = "[RESTOCK] Kulkas",              file = "auto_kulkas.lua" },
     { id = "sayuran",       name = "[RESTOCK] Sayuran",             file = "auto_sayuran.lua" },
