@@ -6,10 +6,9 @@ local clickObject = API.Plot:WaitForChild("ClickObject")
 local autoRestokEnabled = false
 local namaItem = "Bebelove"
 local jumlahBeli = 10
-local sudahBeli = false
 local waktuBeliTerakhir = 0
 
--- Cache area rak gudang agar tidak memanggil GetDescendants() berulang kali
+-- Cache area rak gudang agar ringan (0% frame drop)
 local cacheAreaGudang = {}
 
 local function muatUlangCacheGudang()
@@ -97,8 +96,18 @@ local StatusBeliCard = API.Paragraph(
     "Status: Nonaktif"
 )
 
+local sisaTerakhirUI = -1
+local statusTerakhirUI = nil
+
 local function perbaruiUI(sisaOpsional)
     local sisa = sisaOpsional ~= nil and sisaOpsional or hitungSisaKardus()
+    -- Hanya update UI jika angkanya benar-benar berubah (mencegah lag render UI)
+    if sisa == sisaTerakhirUI and autoRestokEnabled == statusTerakhirUI then
+        return
+    end
+    sisaTerakhirUI = sisa
+    statusTerakhirUI = autoRestokEnabled
+
     API.SetElementText(
         StatusBeliCard,
         "Kardus di Lantai: " .. tostring(sisa) .. "  |  Target: " .. namaItem .. " (" .. tostring(jumlahBeli) .. "x)",
@@ -112,10 +121,8 @@ local function cekDanBeliOtomatis()
 
     if not autoRestokEnabled then return end
 
-    if sisa > 0 then
-        sudahBeli = false
-    elseif sisa == 0 and not sudahBeli and (tick() - waktuBeliTerakhir) >= 3 then
-        sudahBeli = true
+    -- Jika sisa kardus di lantai 0 dan sudah lewat jeda aman 3.5 detik sejak pembelian terakhir
+    if sisa == 0 and (tick() - waktuBeliTerakhir) >= 3.5 then
         waktuBeliTerakhir = tick()
 
         local jumlahKirim = math.clamp(jumlahBeli, 1, 10)
@@ -135,6 +142,7 @@ API.Input(ShopTab, "Nama Produk", "Bebelove", function(text)
     local bersih = tostring(text or ""):match("^%s*(.-)%s*$")
     if bersih ~= "" then
         namaItem = bersih
+        sisaTerakhirUI = -1
         perbaruiUI()
         API.Notify("Produk Diatur", "Target belanja: " .. namaItem, 2)
     end
@@ -148,6 +156,7 @@ API.Paragraph(
 
 API.Slider(ShopTab, "Jumlah Sekali Beli (Max 10)", 1, 10, 1, " Kardus", 10, function(val)
     jumlahBeli = math.clamp(math.floor(tonumber(val) or 10), 1, 10)
+    sisaTerakhirUI = -1
     perbaruiUI()
 end)
 
@@ -155,8 +164,8 @@ API.Section(ShopTab, "Auto Beli Kardus")
 
 API.Toggle(ShopTab, "Aktifkan Auto Beli", false, function(val)
     autoRestokEnabled = val
+    sisaTerakhirUI = -1
     if val then
-        sudahBeli = false
         muatUlangCacheGudang()
         cekDanBeliOtomatis()
     else
@@ -176,7 +185,7 @@ API.Paragraph(
 )
 
 -- ==========================================
--- TRIGGER EVENT-DRIVEN (RINGAN & ANTI-NGEFRAME)
+-- 1. EVENT-DRIVEN (RESPONS INSTAN)
 -- ==========================================
 clickObject.ChildAdded:Connect(function(child)
     if child.Name == "Kardus" then
@@ -194,6 +203,19 @@ clickObject.ChildRemoved:Connect(function(child)
     end
 end)
 
--- Inisialisasi awal sekali jalan
+-- ==========================================
+-- 2. WATCHDOG RINGAN (ANTI-MACET JIKA PARENT TIDAK BERUBAH)
+-- ==========================================
+task.spawn(function()
+    while true do
+        task.wait(2.5)
+        if autoRestokEnabled then
+            cekDanBeliOtomatis()
+        else
+            perbaruiUI()
+        end
+    end
+end)
+
 muatUlangCacheGudang()
 perbaruiUI()
