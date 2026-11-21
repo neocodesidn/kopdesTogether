@@ -18,14 +18,17 @@ local PlotToko = Workspace:WaitForChild("Plot1")
 local clickObject = PlotToko:WaitForChild("ClickObject")
 
 -- ==========================================
--- KONFIGURASI AUTO GUDANG & ANTI-BENTROK
+-- KONFIGURASI & STATE DATA SYNC GUDANG
 -- ==========================================
 local autoGudangEnabled = false
 local jedaAntarSlot = 0.25
 local sedangMenyimpan = false
 
+local cacheSlotKosong = {}
+local totalRakTerdeteksi = 0
+local dataSudahSync = false
+
 local slotDitolakServer = {}
-local slotTerkunciLokal = {}
 local kardusDitolakSementara = {}
 local slotTerakhirDitembak = nil
 local percobaanGagalTangan = 0
@@ -41,9 +44,8 @@ if NotifikasiRemote and NotifikasiRemote:IsA("RemoteEvent") then
     NotifikasiRemote.OnClientEvent:Connect(function(pesan)
         if typeof(pesan) == "string" and slotTerakhirDitembak then
             local pLower = pesan:lower()
-            if pLower:find("sudah terisi") or pLower:find("penuh") or pLower:find("tidak sesuai") then
+            if pLower:find("sudah terisi") or pLower:find("penuh") or pLower:find("tidak sesuai") or pLower:find("ada kardus") then
                 slotDitolakServer[slotTerakhirDitembak] = tick() + 120
-                slotTerkunciLokal[slotTerakhirDitembak] = true
             end
         end
     end)
@@ -109,23 +111,16 @@ local function ambilDaftarKardusLantai()
 end
 
 -- ==========================================
--- PEMINDAIAN SLOT GUDANG KOSONG
--- RakPenyimpananX.InputRak.RakX (Kosong jika tidak ada child persis "Kardus")
+-- TAHAP SCAN & SYNC DATA GUDANG (RakPenyimpananX.InputRak.RakX)
 -- ==========================================
 local function apakahSlotGudangKosong(slotObj)
     if not slotObj or not slotObj.Parent then return false end
 
-    -- 1. Kunci lokal (mencegah double-fire sebelum replikasi selesai)
-    if slotTerkunciLokal[slotObj] then
-        return false
-    end
-
-    -- 2. Cooldown penolakan server
     if slotDitolakServer[slotObj] and tick() < slotDitolakServer[slotObj] then
         return false
     end
 
-    -- 3. Cek persis child bernama "Kardus" di dalam RakX (sesuai hierarki game)
+    -- Kosong jika di dalam RakX tidak ada child .Kardus
     if slotObj:FindFirstChild("Kardus") then
         return false
     end
@@ -133,8 +128,8 @@ local function apakahSlotGudangKosong(slotObj)
     return true
 end
 
-local function cariSemuaSlotGudangKosong()
-    local daftarSlotKosong = {}
+local function scanDanSyncDataGudang()
+    local hasilSlotKosong = {}
     local daftarRakGudang = {}
     local sudahTercatat = {}
 
@@ -170,13 +165,17 @@ local function cariSemuaSlotGudangKosong()
 
             for _, slotObj in ipairs(daftarSlotRak) do
                 if apakahSlotGudangKosong(slotObj) then
-                    table.insert(daftarSlotKosong, slotObj)
+                    table.insert(hasilSlotKosong, slotObj)
                 end
             end
         end
     end
 
-    return daftarSlotKosong, #daftarRakGudang
+    cacheSlotKosong = hasilSlotKosong
+    totalRakTerdeteksi = #daftarRakGudang
+    dataSudahSync = true
+
+    return cacheSlotKosong, totalRakTerdeteksi
 end
 
 -- ==========================================
@@ -286,20 +285,20 @@ local function ambilSatuKardusKeTangan(detailKardus)
 end
 
 -- ==========================================
--- UPDATE UI STATUS & EKSEKUSI 2 TAHAP (Pickup -> PlaceOil SAJA)
+-- UPDATE UI STATUS & ALUR: SCAN -> SYNC -> ISI -> SCAN
 -- ==========================================
 local StatusGudangCard
 
-local function perbaruiStatusUI()
+local function perbaruiStatusUI(faseTeks)
     if not StatusGudangCard then return end
 
-    local slotKosong, totalRak = cariSemuaSlotGudangKosong()
     local kardusLantai = ambilDaftarKardusLantai()
+    local statusDefault = autoGudangEnabled and "Aktif (Siaga)" or "Nonaktif"
 
     API.SetElementText(
         StatusGudangCard,
-        "Slot Gudang Kosong: " .. tostring(#slotKosong) .. " (" .. tostring(totalRak) .. " Rak)  |  Kardus di Lantai: " .. tostring(#kardusLantai),
-        "Status: " .. (autoGudangEnabled and "Aktif" or "Nonaktif")
+        "Slot Gudang Kosong: " .. tostring(#cacheSlotKosong) .. " (" .. tostring(totalRakTerdeteksi) .. " Rak)  |  Kardus di Lantai: " .. tostring(#kardusLantai),
+        "Status: " .. (faseTeks or statusDefault)
     )
 end
 
@@ -312,15 +311,31 @@ local function jalankanSiklusGudang(sekaliJalan)
     task.spawn(function()
         local tersimpanCount = 0
         local ok, err = pcall(function()
+            -- LANGKAH 1: SCAN & SYNC DATA AWAL SEBELUM MEMULAI PENGISIAN
+            perbaruiStatusUI("Scanning & Sync Data Gudang...")
+            task.wait(0.20)
+            local daftarSlotKosong = scanDanSyncDataGudang()
+            perbaruiStatusUI("Data Sync Selesai (" .. tostring(#daftarSlotKosong) .. " slot kosong)")
+
+            if #daftarSlotKosong == 0 then
+                return
+            end
+
+            local daftarKardusAwal = ambilDaftarKardusLantai()
+            if #daftarKardusAwal == 0 and not cariKardusPickedDiKarakter() then
+                return
+            end
+
+            API.Notify(
+                "Sync Gudang Selesai",
+                "Ditemukan " .. tostring(#daftarSlotKosong) .. " slot kosong. Pastikan NPC/player lain tidak mengisi gudang saat proses berjalan.",
+                3
+            )
+            task.wait(0.25)
+
+            -- LANGKAH 2: LOOP SIKLUS (ISI -> SCAN ULANG -> ISI -> SCAN ULANG)
             while sekaliJalan or autoGudangEnabled do
-                local daftarSlotKosong = cariSemuaSlotGudangKosong()
-                if #daftarSlotKosong == 0 then
-                    break
-                end
-
-                local targetSlot = daftarSlotKosong[1]
-                if not targetSlot or not targetSlot.Parent then break end
-
+                -- Ambil kardus dulu ke tangan
                 local picked = cariKardusPickedDiKarakter()
                 if not picked then
                     local daftarKardus = ambilDaftarKardusLantai()
@@ -330,37 +345,48 @@ local function jalankanSiklusGudang(sekaliJalan)
 
                 if not picked then break end
 
-                -- Kunci slot lokal seketika sebelum tembak remote agar tidak pernah bentrok
-                slotTerkunciLokal[targetSlot] = true
-                slotTerakhirDitembak = targetSlot
+                -- SCAN ULANG TEPAT SEBELUM TEMBAK (memastikan tidak diisi NPC/player lain saat kardus diambil)
+                perbaruiStatusUI("Scanning slot kosong...")
+                local slotTersedia = scanDanSyncDataGudang()
+                if #slotTersedia == 0 then
+                    break
+                end
 
-                -- TAHAP 2 SAJA: PlaceOil ke RakPenyimpananX.InputRak.RakX (TANPA PlaceOilDone)
+                local targetSlot = slotTersedia[1]
+                if not targetSlot or not targetSlot.Parent or targetSlot:FindFirstChild("Kardus") then
+                    continue
+                end
+
+                -- ISI 1 SLOT (2 TAHAP: Pickup -> PlaceOil SAJA)
+                perbaruiStatusUI("Mengisi ke " .. targetSlot.Parent.Parent.Name .. "." .. targetSlot.Name .. "...")
+                slotTerakhirDitembak = targetSlot
                 PlaceOilRemote:FireServer(targetSlot)
 
+                -- Tunggu konfirmasi server sampai .Kardus muncul di dalam RakX
                 local terkonfirmasi = false
-                for _ = 1, 14 do
+                for _ = 1, 16 do
                     task.wait(0.10)
-                    local masihDiTangan = cariKardusPickedDiKarakter()
-                    local adaKardusDiSlot = targetSlot:FindFirstChild("Kardus") ~= nil
-                    if not masihDiTangan or adaKardusDiSlot then
+                    if targetSlot:FindFirstChild("Kardus") then
                         terkonfirmasi = true
                         break
                     end
                 end
 
+                -- SCAN ULANG SETELAH PENGISIAN UNTUK SYNC DATA TERBARU
+                scanDanSyncDataGudang()
+                perbaruiStatusUI()
+
                 if terkonfirmasi then
                     tersimpanCount = tersimpanCount + 1
                     percobaanGagalTangan = 0
-                    perbaruiStatusUI()
                     task.wait(jedaAntarSlot)
                 else
-                    -- Jika gagal masuk, buka kunci lokal dan masukkan ke blacklist sementara 60 detik
-                    slotTerkunciLokal[targetSlot] = nil
                     slotDitolakServer[targetSlot] = tick() + 60
                     percobaanGagalTangan = percobaanGagalTangan + 1
                     if percobaanGagalTangan >= 2 then
                         lepasKardusStuckDiTangan()
                     end
+                    task.wait(0.15)
                 end
             end
         end)
@@ -370,6 +396,7 @@ local function jalankanSiklusGudang(sekaliJalan)
         end
 
         sedangMenyimpan = false
+        scanDanSyncDataGudang()
         perbaruiStatusUI()
 
         if sekaliJalan then
@@ -384,9 +411,12 @@ end
 clickObject.ChildAdded:Connect(function(child)
     if child.Name == "Kardus" then
         task.wait(0.25)
-        perbaruiStatusUI()
-        if autoGudangEnabled then
-            jalankanSiklusGudang(false)
+        if not sedangMenyimpan then
+            scanDanSyncDataGudang()
+            perbaruiStatusUI()
+            if autoGudangEnabled then
+                jalankanSiklusGudang(false)
+            end
         end
     end
 end)
@@ -394,16 +424,6 @@ end)
 clickObject.ChildRemoved:Connect(function(child)
     if child.Name == "Kardus" and not sedangMenyimpan then
         perbaruiStatusUI()
-    end
-end)
-
--- Jika kardus di dalam RakGudang diambil manual/NPC, buka kunci slotnya otomatis
-PlotToko.DescendantRemoving:Connect(function(desc)
-    if desc.Name == "Kardus" and desc.Parent and desc.Parent.Name:lower():match("^rak%d+$") then
-        local slotObj = desc.Parent
-        slotTerkunciLokal[slotObj] = nil
-        slotDitolakServer[slotObj] = nil
-        task.defer(perbaruiStatusUI)
     end
 end)
 
@@ -419,11 +439,11 @@ StatusGudangCard = API.Paragraph(
     "Status: Nonaktif"
 )
 
--- 2. TENGAH: PENJELASAN CARA PEMAKAIAN
+-- 2. TENGAH: PENJELASAN CARA PEMAKAIAN & PERINGATAN
 API.Paragraph(
     GudangTab,
-    "Cara Pemakaian",
-    "Aktifkan toggle di bawah untuk memindahkan kardus yang ada di lantai ke slot kosong Rak Penyimpanan (Gudang) secara otomatis."
+    "Cara Pemakaian & Peringatan",
+    "Sistem akan melakukan Scan & Sync slot kosong terlebih dahulu sebelum mengisi. Pastikan tidak ada player lain atau NPC gudang yang sedang mengisi rak bersamaan."
 )
 
 -- 3. BAWAH: FITUR & KONTROL
@@ -431,9 +451,11 @@ API.Section(GudangTab, "Kontrol")
 
 API.Toggle(GudangTab, "Auto Simpan ke Gudang", false, function(val)
     autoGudangEnabled = val
-    perbaruiStatusUI()
     if val then
         jalankanSiklusGudang(false)
+    else
+        scanDanSyncDataGudang()
+        perbaruiStatusUI("Nonaktif")
     end
 end)
 
@@ -445,13 +467,17 @@ API.Button(GudangTab, "Simpan Semua Sekarang (1x)", function()
     jalankanSiklusGudang(true)
 end)
 
-API.Button(GudangTab, "Refresh Data", function()
+API.Button(GudangTab, "Scan & Sync Ulang Data", function()
     slotDitolakServer = {}
-    slotTerkunciLokal = {}
     kardusDitolakSementara = {}
     percobaanGagalTangan = 0
+    perbaruiStatusUI("Scanning & Sync Data Gudang...")
+    task.wait(0.10)
+    local slotKosong, totalRak = scanDanSyncDataGudang()
     perbaruiStatusUI()
-    API.Notify("Diperbarui", "Data slot gudang dan kardus diperbarui.", 2)
+    API.Notify("Sync Selesai", "Tersinkron: " .. tostring(#slotKosong) .. " slot kosong dari " .. tostring(totalRak) .. " rak.", 2)
 end)
 
+-- Scan awal saat plugin dimuat
+scanDanSyncDataGudang()
 perbaruiStatusUI()
