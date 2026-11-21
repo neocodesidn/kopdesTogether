@@ -2,143 +2,160 @@ local API = ...
 
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
 
-local hideNpcEnabled = false
 local fpsBoostEnabled = false
-local hideOtherPlotsEnabled = false
+local koneksiWorkspace = nil
+local koneksiLighting = nil
+local koneksiPlayerAdded = nil
+local koneksiCharAdded = {}
 
-local koneksiDescendantNPC = nil
-local koneksiDescendantWorkspace = nil
-local dataAsliObjek = setmetatable({}, { __mode = "k" })
+local StatusFpsCard
+
+local function perbaruiStatusUI()
+    if not StatusFpsCard then return end
+    API.SetElementText(
+        StatusFpsCard,
+        "Ultra FPS Boost: " .. (fpsBoostEnabled and "AKTIF (Maximal Reduce)" or "Nonaktif"),
+        fpsBoostEnabled
+            and "Map polos tanpa bayangan/tekstur & seluruh karakter menjadi kotak polos."
+            or "Klik toggle di bawah untuk memangkas grafik map dan karakter secara maksimal."
+    )
+end
 
 -- ==========================================
--- DETEKSI PLOT MILIK SENDIRI (AMAN DARI HIDE)
+-- 1. REDUCE KARAKTER JADI KOTAK POLOS (HAPUS AKSESORIS, BAJU, MESH)
 -- ==========================================
-local function dapatkanPlotMilikSendiri()
-    local lp = API.LocalPlayer
-    for _, obj in ipairs(Workspace:GetChildren()) do
-        if obj.Name:match("^Plot%d+$") and obj:FindFirstChild("ClickObject") then
-            local ownerAttr = obj:GetAttribute("Owner") or obj:GetAttribute("UserId")
-            if ownerAttr == lp.Name or ownerAttr == lp.UserId then
-                return obj
-            end
-            for _, val in ipairs(obj:GetDescendants()) do
-                if (val:IsA("StringValue") and val.Value == lp.Name)
-                    or (val:IsA("IntValue") and val.Value == lp.UserId)
-                    or (val:IsA("ObjectValue") and val.Value == lp) then
-                    return obj
+local function jadikanKarakterKotak(char)
+    if not char then return end
+
+    for _, desc in ipairs(char:GetDescendants()) do
+        if desc:IsA("Accessory")
+            or desc:IsA("Hat")
+            or desc:IsA("Shirt")
+            or desc:IsA("Pants")
+            or desc:IsA("ShirtGraphic")
+            or desc:IsA("CharacterMesh")
+            or desc:IsA("BodyColors")
+            or desc:IsA("SurfaceAppearance")
+            or desc:IsA("WrapLayer")
+            or desc:IsA("WrapTarget") then
+            pcall(function() desc:Destroy() end)
+        elseif desc:IsA("SpecialMesh") then
+            -- Ubah kepala/bagian tubuh bulat menjadi kotak polos
+            pcall(function()
+                desc.MeshType = Enum.MeshType.Brick
+                desc.TextureId = ""
+            end)
+        elseif desc:IsA("MeshPart") then
+            pcall(function()
+                desc.TextureID = ""
+                desc.Material = Enum.Material.SmoothPlastic
+                desc.CastShadow = false
+            end)
+        elseif desc:IsA("Decal") or desc:IsA("Texture") then
+            pcall(function() desc:Destroy() end)
+        elseif desc:IsA("BasePart") then
+            pcall(function()
+                desc.Material = Enum.Material.SmoothPlastic
+                desc.CastShadow = false
+                desc.Reflectance = 0
+                desc.Color = Color3.fromRGB(190, 190, 190)
+            end)
+        end
+    end
+end
+
+local function bersihkanSemuaKarakter()
+    -- Bersihkan seluruh player di server
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character then
+            jadikanKarakterKotak(plr.Character)
+        end
+        if not koneksiCharAdded[plr] then
+            koneksiCharAdded[plr] = plr.CharacterAdded:Connect(function(newChar)
+                if fpsBoostEnabled then
+                    task.wait(0.15)
+                    jadikanKarakterKotak(newChar)
                 end
-            end
+            end)
         end
     end
-    return (API and API.Plot) or Workspace:FindFirstChild("Plot1")
-end
 
-local PlotSendiri = dapatkanPlotMilikSendiri()
-
--- ==========================================
--- UTILITAS SEMBUNYIKAN & PULIHKAN OBJEK VISUAL
--- ==========================================
-local function sembunyikanVisual(obj)
-    if obj:IsA("BasePart") then
-        if not dataAsliObjek[obj] then
-            dataAsliObjek[obj] = {
-                Transparency = obj.Transparency,
-                CastShadow = obj.CastShadow
-            }
+    -- Bersihkan juga seluruh model ber-Humanoid di Workspace (NPC kasir, pembeli, pencuri, dll)
+    for _, desc in ipairs(Workspace:GetDescendants()) do
+        if desc:IsA("Humanoid") and desc.Parent and desc.Parent:IsA("Model") then
+            jadikanKarakterKotak(desc.Parent)
         end
-        obj.Transparency = 1
-        obj.CastShadow = false
-    elseif obj:IsA("Decal") or obj:IsA("Texture") then
-        if not dataAsliObjek[obj] then
-            dataAsliObjek[obj] = {
-                Transparency = obj.Transparency
-            }
-        end
-        obj.Transparency = 1
-    elseif obj:IsA("BillboardGui") or obj:IsA("SurfaceGui") or obj:IsA("Highlight") or obj:IsA("ParticleEmitter") then
-        if not dataAsliObjek[obj] then
-            dataAsliObjek[obj] = {
-                Enabled = obj.Enabled
-            }
-        end
-        obj.Enabled = false
-    end
-end
-
-local function pulihkanVisual(obj)
-    local asli = dataAsliObjek[obj]
-    if not asli then return end
-
-    if obj:IsA("BasePart") then
-        obj.Transparency = asli.Transparency or 0
-        obj.CastShadow = (asli.CastShadow ~= nil) and asli.CastShadow or true
-    elseif obj:IsA("Decal") or obj:IsA("Texture") then
-        obj.Transparency = asli.Transparency or 0
-    elseif obj:IsA("BillboardGui") or obj:IsA("SurfaceGui") or obj:IsA("Highlight") or obj:IsA("ParticleEmitter") then
-        obj.Enabled = (asli.Enabled ~= nil) and asli.Enabled or true
     end
 end
 
 -- ==========================================
--- 1. HIDE NPC PEMBELI (Workspace.NPC_Pembeli)
+-- 2. MAXIMAL REDUCE MAP & LIGHTING
 -- ==========================================
-local function prosesSeluruhNPC(aktifkan)
-    local folderNPC = Workspace:FindFirstChild("NPC_Pembeli")
-    if not folderNPC then return 0 end
+local function reduksiObjekMap(obj)
+    if not obj or not obj.Parent then return end
 
-    local jumlah = #folderNPC:GetChildren()
-    for _, desc in ipairs(folderNPC:GetDescendants()) do
-        if aktifkan then
-            sembunyikanVisual(desc)
-        else
-            pulihkanVisual(desc)
-        end
-    end
-
-    if koneksiDescendantNPC then
-        koneksiDescendantNPC:Disconnect()
-        koneksiDescendantNPC = nil
-    end
-
-    if aktifkan then
-        koneksiDescendantNPC = folderNPC.DescendantAdded:Connect(function(desc)
-            if hideNpcEnabled then
-                sembunyikanVisual(desc)
-            end
-        end)
-    end
-
-    return jumlah
-end
-
--- ==========================================
--- 2. ULTRA FPS BOOST (POTATO GRAPHICS)
--- ==========================================
-local function optimasiSatuPart(obj)
-    if obj:IsA("BasePart") then
-        obj.CastShadow = false
+    if obj:IsA("Accessory")
+        or obj:IsA("Hat")
+        or obj:IsA("Shirt")
+        or obj:IsA("Pants")
+        or obj:IsA("ShirtGraphic")
+        or obj:IsA("CharacterMesh")
+        or obj:IsA("SurfaceAppearance") then
+        pcall(function() obj:Destroy() end)
+    elseif obj:IsA("MeshPart") then
+        obj.TextureID = ""
         obj.Material = Enum.Material.SmoothPlastic
-    elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-        obj.Enabled = false
-    elseif obj:IsA("Decal") or obj:IsA("Texture") then
-        if not obj:FindFirstAncestorWhichIsA("SurfaceGui") then
-            obj.Transparency = 1
+        obj.CastShadow = false
+        obj.Reflectance = 0
+    elseif obj:IsA("BasePart") then
+        obj.Material = Enum.Material.SmoothPlastic
+        obj.CastShadow = false
+        obj.Reflectance = 0
+    elseif obj:IsA("SpecialMesh") then
+        obj.TextureId = ""
+        if obj.Parent and obj.Parent.Parent and obj.Parent.Parent:FindFirstChildOfClass("Humanoid") then
+            obj.MeshType = Enum.MeshType.Brick
         end
+    elseif obj:IsA("Decal") or obj:IsA("Texture") then
+        -- Pertahankan tulisan/harga di papan GUI supaya masih terbaca
+        if not obj:FindFirstAncestorWhichIsA("SurfaceGui") and not obj:FindFirstAncestorWhichIsA("BillboardGui") then
+            pcall(function() obj:Destroy() end)
+        end
+    elseif obj:IsA("ParticleEmitter")
+        or obj:IsA("Trail")
+        or obj:IsA("Smoke")
+        or obj:IsA("Fire")
+        or obj:IsA("Sparkles")
+        or obj:IsA("Beam") then
+        obj.Enabled = false
+    elseif obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
+        obj.Enabled = false
     end
 end
 
-local function aktifkanPotatoFpsBoost()
+local function reduksiLightingMaksimal()
     pcall(function()
         settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
     end)
 
     Lighting.GlobalShadows = false
     Lighting.FogEnd = 9e9
+    Lighting.FogStart = 9e9
     Lighting.Brightness = 1
+    Lighting.EnvironmentDiffuseScale = 0
+    Lighting.EnvironmentSpecularScale = 0
 
     for _, efek in ipairs(Lighting:GetChildren()) do
-        if efek:IsA("PostEffect") or efek:IsA("BlurEffect") or efek:IsA("BloomEffect") or efek:IsA("SunRaysEffect") or efek:IsA("DepthOfFieldEffect") then
+        if efek:IsA("PostEffect")
+            or efek:IsA("BlurEffect")
+            or efek:IsA("BloomEffect")
+            or efek:IsA("SunRaysEffect")
+            or efek:IsA("DepthOfFieldEffect")
+            or efek:IsA("ColorCorrectionEffect")
+            or efek:IsA("Atmosphere")
+            or efek:IsA("Sky") then
             efek.Enabled = false
         end
     end
@@ -149,109 +166,109 @@ local function aktifkanPotatoFpsBoost()
         terrain.WaterWaveSpeed = 0
         terrain.WaterReflectance = 0
         terrain.WaterTransparency = 0
+        pcall(function() terrain.Decoration = false end)
     end
+end
 
-    for _, desc in ipairs(Workspace:GetDescendants()) do
-        optimasiSatuPart(desc)
-    end
+local function aktifkanMaxFpsBoost()
+    reduksiLightingMaksimal()
+    bersihkanSemuaKarakter()
 
-    if koneksiDescendantWorkspace then
-        koneksiDescendantWorkspace:Disconnect()
-        koneksiDescendantWorkspace = nil
-    end
-
-    koneksiDescendantWorkspace = Workspace.DescendantAdded:Connect(function(desc)
-        if fpsBoostEnabled then
-            optimasiSatuPart(desc)
+    -- Sapu seluruh objek map secara bertahap per batch agar tidak freeze saat pertama diklik
+    task.spawn(function()
+        local semuaObjek = Workspace:GetDescendants()
+        for i = 1, #semuaObjek do
+            if not fpsBoostEnabled then break end
+            reduksiObjekMap(semuaObjek[i])
+            if i % 400 == 0 then
+                task.wait()
+            end
         end
+    end)
+
+    if koneksiWorkspace then koneksiWorkspace:Disconnect() end
+    koneksiWorkspace = Workspace.DescendantAdded:Connect(function(desc)
+        if not fpsBoostEnabled then return end
+        if desc:IsA("Humanoid") and desc.Parent then
+            task.defer(function()
+                jadikanKarakterKotak(desc.Parent)
+            end)
+        else
+            reduksiObjekMap(desc)
+        end
+    end)
+
+    if koneksiLighting then koneksiLighting:Disconnect() end
+    koneksiLighting = Lighting.ChildAdded:Connect(function(efek)
+        if fpsBoostEnabled and (efek:IsA("PostEffect") or efek:IsA("Atmosphere") or efek:IsA("Sky")) then
+            efek.Enabled = false
+        end
+    end)
+
+    if koneksiPlayerAdded then koneksiPlayerAdded:Disconnect() end
+    koneksiPlayerAdded = Players.PlayerAdded:Connect(function(plr)
+        koneksiCharAdded[plr] = plr.CharacterAdded:Connect(function(newChar)
+            if fpsBoostEnabled then
+                task.wait(0.15)
+                jadikanKarakterKotak(newChar)
+            end
+        end)
     end)
 end
 
--- ==========================================
--- 3. HIDE PLOT PEMAIN LAIN
--- ==========================================
-local function prosesPlotPemainLain(aktifkan)
-    local jumlahPlot = 0
-    for _, obj in ipairs(Workspace:GetChildren()) do
-        if obj.Name:match("^Plot%d+$") and obj ~= PlotSendiri then
-            jumlahPlot = jumlahPlot + 1
-            for _, desc in ipairs(obj:GetDescendants()) do
-                if aktifkan then
-                    sembunyikanVisual(desc)
-                else
-                    pulihkanVisual(desc)
-                end
-            end
-        end
+local function matikanListenerFpsBoost()
+    if koneksiWorkspace then
+        koneksiWorkspace:Disconnect()
+        koneksiWorkspace = nil
     end
-    return jumlahPlot
+    if koneksiLighting then
+        koneksiLighting:Disconnect()
+        koneksiLighting = nil
+    end
+    if koneksiPlayerAdded then
+        koneksiPlayerAdded:Disconnect()
+        koneksiPlayerAdded = nil
+    end
 end
 
 -- ==========================================
--- UI TAB: OPTIMASI / BOOST FPS
+-- UI TAB: BOOST FPS (KHUSUS MAXIMAL FPS BOOST)
 -- ==========================================
 local FpsTab = API.CreateTab("Boost FPS")
 
--- FITUR 1: HIDE NPC PEMBELI
-API.Section(FpsTab, "Sembunyikan NPC Pembeli")
-local StatusNpcCard = API.Paragraph(
+StatusFpsCard = API.Paragraph(
     FpsTab,
-    "Status NPC Pembeli: Nonaktif",
-    "NPC Pembeli tampil normal di layar."
+    "Ultra FPS Boost: Nonaktif",
+    "Klik toggle di bawah untuk memangkas grafik map dan karakter secara maksimal."
 )
 
-API.Toggle(FpsTab, "Sembunyikan NPC Pembeli", false, function(val)
-    hideNpcEnabled = val
-    local total = prosesSeluruhNPC(val)
-    API.SetElementText(
-        StatusNpcCard,
-        val and ("Status NPC Pembeli: Aktif (" .. tostring(total) .. " NPC)") or "Status NPC Pembeli: Nonaktif",
-        val and "Seluruh model & efek NPC baru otomatis disembunyikan." or "Tampilan NPC Pembeli dikembalikan seperti semula."
-    )
-end)
+API.Section(FpsTab, "Kontrol FPS Boost")
 
-API.Paragraph(
-    FpsTab,
-    "Penjelasan Sembunyikan NPC Pembeli",
-    "Menyembunyikan seluruh tubuh, aksesoris, bayangan, dan tanda di atas kepala NPC Pembeli di pihak pemain supaya transaksi kasir tidak terganggu dan game berjalan lebih ringan."
-)
-
--- FITUR 2: ULTRA FPS BOOST
-API.Section(FpsTab, "Ultra FPS Boost")
 API.Toggle(FpsTab, "Aktifkan Ultra FPS Boost", false, function(val)
     fpsBoostEnabled = val
+    perbaruiStatusUI()
     if val then
-        aktifkanPotatoFpsBoost()
-        API.Notify("FPS Boost Aktif", "Bayangan, partikel, dan tekstur dekorasi dinonaktifkan.", 3)
+        aktifkanMaxFpsBoost()
+        API.Notify("Ultra FPS Boost Aktif", "Map & seluruh karakter dipangkas menjadi kotak polos.", 3)
     else
-        if koneksiDescendantWorkspace then
-            koneksiDescendantWorkspace:Disconnect()
-            koneksiDescendantWorkspace = nil
-        end
-        API.Notify("FPS Boost Mati", "Optimasi objek baru dihentikan.", 2)
+        matikanListenerFpsBoost()
+        API.Notify("FPS Boost Nonaktif", "Pemangkasan objek baru dihentikan.", 2)
     end
 end)
 
-API.Paragraph(
-    FpsTab,
-    "Penjelasan Ultra FPS Boost",
-    "Mematikan bayangan, efek cahaya, partikel koin/pengalaman, dan menyederhanakan permukaan objek supaya perangkat lebih ringan."
-)
-
--- FITUR 3: HIDE PLOT PEMAIN LAIN
-API.Section(FpsTab, "Sembunyikan Toko Pemain Lain")
-API.Toggle(FpsTab, "Sembunyikan Toko Pemain Lain", false, function(val)
-    hideOtherPlotsEnabled = val
-    local totalPlot = prosesPlotPemainLain(val)
-    API.Notify(
-        val and "Toko Lain Disembunyikan" or "Toko Lain Ditampilkan",
-        tostring(totalPlot) .. " plot pemain lain " .. (val and "disembunyikan." or "dikembalikan."),
-        2
-    )
+API.Button(FpsTab, "Paksa Bersihkan Map & Karakter Sekarang", function()
+    reduksiLightingMaksimal()
+    bersihkanSemuaKarakter()
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        reduksiObjekMap(obj)
+    end
+    API.Notify("Selesai", "Seluruh map, aksesoris, dan karakter berhasil dipangkas ulang.", 2)
 end)
 
 API.Paragraph(
     FpsTab,
-    "Penjelasan Sembunyikan Toko Lain",
-    "Menyembunyikan seluruh rak, kardus, dan dekorasi milik pemain lain supaya hanya toko kamu yang ditampilkan."
+    "Cara Kerja Ultra FPS Boost",
+    "Menghapus seluruh aksesoris, baju, celana, tekstur wajah, mesh karakter (menjadi kotak abu-abu polos), mematikan bayangan, lampu, efek cahaya, partikel, dan menyederhanakan material map menjadi SmoothPlastic."
 )
+
+perbaruiStatusUI()
