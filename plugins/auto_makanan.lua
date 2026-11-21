@@ -610,19 +610,33 @@ local function ambilSatuKardusAman(detailKardus)
 end
 
 -- ==========================================
--- UPDATE UI STATUS & EKSEKUSI EVENT-DRIVEN
+-- UPDATE UI STATUS & EKSEKUSI REAL-TIME
 -- ==========================================
 local StatusInputCard
+local lastSlotCount = -1
+local lastKardusCount = -1
+local lastToggleState = nil
 
-local function perbaruiStatusUI()
+local function perbaruiStatusUI(slotKosongOpsional, kardusMakananOpsional)
     if not StatusInputCard then return end
 
-    local slotKosong = cariSemuaSlotKosong()
-    local kardusMakanan = ambilSemuaKardusMakanan()
+    local slotKosong = slotKosongOpsional or cariSemuaSlotKosong()
+    local kardusMakanan = kardusMakananOpsional or ambilSemuaKardusMakanan()
+
+    local jmlSlot = #slotKosong
+    local jmlKardus = #kardusMakanan
+
+    if jmlSlot == lastSlotCount and jmlKardus == lastKardusCount and autoPlaceRakEnabled == lastToggleState then
+        return
+    end
+
+    lastSlotCount = jmlSlot
+    lastKardusCount = jmlKardus
+    lastToggleState = autoPlaceRakEnabled
 
     API.SetElementText(
         StatusInputCard,
-        "Slot Kosong: " .. tostring(#slotKosong) .. "  |  Kardus Makanan: " .. tostring(#kardusMakanan),
+        "Slot Kosong: " .. tostring(jmlSlot) .. "  |  Kardus Makanan: " .. tostring(jmlKardus),
         "Status: " .. (autoPlaceRakEnabled and "Aktif" or "Nonaktif")
     )
 end
@@ -722,8 +736,47 @@ local function jalankanSiklusIsiRak(abaikanToggle)
 end
 
 -- ==========================================
--- TRIGGER EVENT-DRIVEN (ANTI-LAG TANPA LOOPING)
+-- LISTENER REAL-TIME RAK BELANJA + LANTAI
 -- ==========================================
+local rakTerpasangListener = {}
+
+local function pasangListenerRak(modelRak)
+    if rakTerpasangListener[modelRak] then return end
+    local jumlahSlot = dapatkanJumlahSlotModelRak(modelRak)
+    if not jumlahSlot then return end
+
+    local inputRak = modelRak:FindFirstChild("InputRak")
+    if not inputRak then return end
+
+    rakTerpasangListener[modelRak] = true
+
+    for i = 1, jumlahSlot do
+        local slotPart = inputRak:FindFirstChild("Rak" .. tostring(i))
+        if slotPart then
+            local folderItem = dapatkanFolderItemPapan(slotPart)
+            if folderItem then
+                folderItem.ChildRemoved:Connect(function()
+                    if #folderItem:GetChildren() == 0 then
+                        perbaruiStatusUI()
+                        if autoPlaceRakEnabled and not sedangMengisiRak then
+                            jalankanSiklusIsiRak(false)
+                        end
+                    end
+                end)
+                folderItem.ChildAdded:Connect(function()
+                    if not sedangMengisiRak then
+                        perbaruiStatusUI()
+                    end
+                end)
+            end
+        end
+    end
+end
+
+for _, modelRak in ipairs(clickObject:GetChildren()) do
+    pasangListenerRak(modelRak)
+end
+
 clickObject.ChildAdded:Connect(function(child)
     if child.Name == "Kardus" then
         task.wait(0.25)
@@ -731,6 +784,10 @@ clickObject.ChildAdded:Connect(function(child)
         if autoPlaceRakEnabled then
             jalankanSiklusIsiRak(false)
         end
+    elseif dapatkanJumlahSlotModelRak(child) then
+        task.wait(0.25)
+        pasangListenerRak(child)
+        perbaruiStatusUI()
     end
 end)
 
@@ -764,6 +821,7 @@ API.Section(InputTab, "Kontrol")
 
 API.Toggle(InputTab, "Auto Isi Makanan", false, function(val)
     autoPlaceRakEnabled = val
+    lastToggleState = nil
     perbaruiStatusUI()
     if val then
         jalankanSiklusIsiRak(false)
@@ -789,9 +847,27 @@ API.Button(InputTab, "Refresh Data", function()
     percobaanGagalTangan = 0
     instancePickedTerverifikasi = nil
     namaPickedTerverifikasi = nil
+    lastSlotCount = -1
+    lastKardusCount = -1
     muatDatabaseProduct()
+    for _, modelRak in ipairs(clickObject:GetChildren()) do
+        pasangListenerRak(modelRak)
+    end
     perbaruiStatusUI()
     API.Notify("Diperbarui", "Data slot dan kardus makanan diperbarui.", 2)
+end)
+
+-- Sinkronisasi ringan setiap 0.6 detik tanpa GetDescendants (0% lag)
+task.spawn(function()
+    while true do
+        task.wait(0.6)
+        local slotKosong = cariSemuaSlotKosong()
+        local kardusMakanan = ambilSemuaKardusMakanan()
+        perbaruiStatusUI(slotKosong, kardusMakanan)
+        if autoPlaceRakEnabled and not sedangMengisiRak and #slotKosong > 0 and #kardusMakanan > 0 then
+            jalankanSiklusIsiRak(false)
+        end
+    end
 end)
 
 perbaruiStatusUI()
