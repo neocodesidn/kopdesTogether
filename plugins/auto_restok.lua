@@ -7,6 +7,30 @@ local autoRestokEnabled = false
 local namaItem = "Bebelove"
 local jumlahBeli = 10
 local sudahBeli = false
+local waktuBeliTerakhir = 0
+
+-- Cache area rak gudang agar tidak memanggil GetDescendants() berulang kali
+local cacheAreaGudang = {}
+
+local function muatUlangCacheGudang()
+    local daftar = {}
+    for _, obj in ipairs(API.Plot:GetDescendants()) do
+        local namaLower = obj.Name:lower()
+        if (obj:IsA("Model") or obj:IsA("BasePart")) and (namaLower:find("rakpenyimpanan") or namaLower:find("gudang")) then
+            local cf, size
+            if obj:IsA("Model") then
+                local ok, boxCF, boxSize = pcall(function() return obj:GetBoundingBox() end)
+                if ok then cf, size = boxCF, boxSize end
+            else
+                cf, size = obj.CFrame, obj.Size
+            end
+            if cf and size then
+                table.insert(daftar, { cf = cf, size = size })
+            end
+        end
+    end
+    cacheAreaGudang = daftar
+end
 
 local function ambilPosisiObjek(obj)
     if obj:IsA("BasePart") then
@@ -23,7 +47,8 @@ end
 local function apakahKardusDiRakGudang(kardus)
     local curr = kardus.Parent
     while curr and curr ~= workspace do
-        if curr.Name:lower():find("gudang") then
+        local namaLower = curr.Name:lower()
+        if namaLower:find("rakpenyimpanan") or namaLower:find("gudang") then
             return true
         end
         curr = curr.Parent
@@ -38,25 +63,13 @@ local function apakahKardusDiRakGudang(kardus)
     local posKardus = ambilPosisiObjek(kardus)
     if not posKardus then return false end
 
-    for _, obj in ipairs(API.Plot:GetDescendants()) do
-        if (obj:IsA("Model") or obj:IsA("BasePart")) and obj.Name:lower():find("gudang") then
-            local cf, size
-            if obj:IsA("Model") then
-                local ok, boxCF, boxSize = pcall(function() return obj:GetBoundingBox() end)
-                if ok then cf, size = boxCF, boxSize end
-            else
-                cf, size = obj.CFrame, obj.Size
-            end
-
-            if cf and size then
-                local rel = cf:PointToObjectSpace(posKardus)
-                local tol = 1.5
-                if math.abs(rel.X) <= (size.X / 2 + tol)
-                    and math.abs(rel.Y) <= (size.Y / 2 + tol)
-                    and math.abs(rel.Z) <= (size.Z / 2 + tol) then
-                    return true
-                end
-            end
+    for _, area in ipairs(cacheAreaGudang) do
+        local rel = area.cf:PointToObjectSpace(posKardus)
+        local tol = 1.5
+        if math.abs(rel.X) <= (area.size.X / 2 + tol)
+            and math.abs(rel.Y) <= (area.size.Y / 2 + tol)
+            and math.abs(rel.Z) <= (area.size.Z / 2 + tol) then
+            return true
         end
     end
 
@@ -78,11 +91,51 @@ end
 -- ==========================================
 local ShopTab = API.CreateTab("Auto Beli Kardus")
 
+local StatusBeliCard = API.Paragraph(
+    ShopTab,
+    "Kardus di Lantai: 0  |  Target: Bebelove (10x)",
+    "Status: Nonaktif"
+)
+
+local function perbaruiUI(sisaOpsional)
+    local sisa = sisaOpsional ~= nil and sisaOpsional or hitungSisaKardus()
+    API.SetElementText(
+        StatusBeliCard,
+        "Kardus di Lantai: " .. tostring(sisa) .. "  |  Target: " .. namaItem .. " (" .. tostring(jumlahBeli) .. "x)",
+        "Status: " .. (autoRestokEnabled and "Aktif" or "Nonaktif")
+    )
+end
+
+local function cekDanBeliOtomatis()
+    local sisa = hitungSisaKardus()
+    perbaruiUI(sisa)
+
+    if not autoRestokEnabled then return end
+
+    if sisa > 0 then
+        sudahBeli = false
+    elseif sisa == 0 and not sudahBeli and (tick() - waktuBeliTerakhir) >= 3 then
+        sudahBeli = true
+        waktuBeliTerakhir = tick()
+
+        local jumlahKirim = math.clamp(jumlahBeli, 1, 10)
+        BeliProductRemote:FireServer({
+            {
+                jumlahKardus = jumlahKirim,
+                itemName = namaItem
+            }
+        })
+        API.Notify("Belanja Berhasil", "Membeli " .. jumlahKirim .. " kardus " .. namaItem .. ".", 3)
+    end
+end
+
 API.Section(ShopTab, "Pengaturan Produk")
 
 API.Input(ShopTab, "Nama Produk", "Bebelove", function(text)
-    if text ~= "" then
-        namaItem = text
+    local bersih = tostring(text or ""):match("^%s*(.-)%s*$")
+    if bersih ~= "" then
+        namaItem = bersih
+        perbaruiUI()
         API.Notify("Produk Diatur", "Target belanja: " .. namaItem, 2)
     end
 end)
@@ -95,13 +148,20 @@ API.Paragraph(
 
 API.Slider(ShopTab, "Jumlah Sekali Beli (Max 10)", 1, 10, 1, " Kardus", 10, function(val)
     jumlahBeli = math.clamp(math.floor(tonumber(val) or 10), 1, 10)
+    perbaruiUI()
 end)
 
 API.Section(ShopTab, "Auto Beli Kardus")
 
 API.Toggle(ShopTab, "Aktifkan Auto Beli", false, function(val)
     autoRestokEnabled = val
-    if val then sudahBeli = false end
+    if val then
+        sudahBeli = false
+        muatUlangCacheGudang()
+        cekDanBeliOtomatis()
+    else
+        perbaruiUI()
+    end
     API.Notify(
         val and "Auto Beli Aktif" or "Auto Beli Mati",
         val and ("Siap membeli maksimal " .. jumlahBeli .. " kardus " .. namaItem .. " saat stok di lantai habis.") or "Auto beli kardus dihentikan.",
@@ -116,26 +176,24 @@ API.Paragraph(
 )
 
 -- ==========================================
--- LOGIKA PENGECEKAN STOK
+-- TRIGGER EVENT-DRIVEN (RINGAN & ANTI-NGEFRAME)
 -- ==========================================
-task.spawn(function()
-    while true do
-        if autoRestokEnabled then
-            local sisa = hitungSisaKardus()
-            if sisa > 0 then
-                sudahBeli = false
-            elseif sisa == 0 and not sudahBeli then
-                sudahBeli = true
-                local jumlahKirim = math.clamp(jumlahBeli, 1, 10)
-                BeliProductRemote:FireServer({
-                    {
-                        jumlahKardus = jumlahKirim,
-                        itemName = namaItem
-                    }
-                })
-                API.Notify("Belanja Berhasil", "Membeli " .. jumlahKirim .. " kardus " .. namaItem .. ".", 3)
-            end
-        end
-        task.wait(1)
+clickObject.ChildAdded:Connect(function(child)
+    if child.Name == "Kardus" then
+        task.wait(0.25)
+        cekDanBeliOtomatis()
+    elseif child.Name:lower():find("rakpenyimpanan") or child.Name:lower():find("gudang") then
+        task.wait(0.25)
+        muatUlangCacheGudang()
     end
 end)
+
+clickObject.ChildRemoved:Connect(function(child)
+    if child.Name == "Kardus" then
+        task.defer(cekDanBeliOtomatis)
+    end
+end)
+
+-- Inisialisasi awal sekali jalan
+muatUlangCacheGudang()
+perbaruiUI()
