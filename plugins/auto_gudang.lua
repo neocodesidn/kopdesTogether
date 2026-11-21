@@ -18,10 +18,8 @@ local PlotToko = Workspace:WaitForChild("Plot1")
 local clickObject = PlotToko:WaitForChild("ClickObject")
 
 -- ==========================================
--- KONFIGURASI AUTO GUDANG (6 SLOT: Rak1 - Rak6)
+-- KONFIGURASI AUTO GUDANG
 -- ==========================================
-local MAX_SLOT_GUDANG = 6
-
 local autoGudangEnabled = false
 local jedaAntarSlot = 0.25
 local sedangMenyimpan = false
@@ -109,24 +107,18 @@ local function ambilDaftarKardusLantai()
 end
 
 -- ==========================================
--- PEMINDAIAN SLOT GUDANG KOSONG DI Plot1
--- RakPenyimpananX.InputRak.RakX
+-- PEMINDAIAN SLOT GUDANG KOSONG
+-- RakPenyimpananX.InputRak.RakX (Kosong jika tidak ada child .Kardus)
 -- ==========================================
-local function apakahSlotGudangKosong(rakPart, indexSlot)
-    if not rakPart or not rakPart:IsA("BasePart") then return false end
+local function apakahSlotGudangKosong(slotObj)
+    if not slotObj or not slotObj.Parent then return false end
 
-    if slotDitolakServer[rakPart] and tick() < slotDitolakServer[rakPart] then
+    if slotDitolakServer[slotObj] and tick() < slotDitolakServer[slotObj] then
         return false
     end
 
-    -- Cek langsung jika di dalam RakX sudah ada child bernama "Kardus"
-    if rakPart:FindFirstChild("Kardus") then
-        return false
-    end
-
-    -- Cek jika ada folder/part Kardus1..6 dan di dalamnya sudah ada "Kardus"
-    local subKardus = rakPart:FindFirstChild("Kardus" .. tostring(indexSlot))
-    if subKardus and subKardus:FindFirstChild("Kardus") then
+    -- Jika di dalam RakX sudah ada .Kardus, berarti sudah terisi -> skip
+    if slotObj:FindFirstChild("Kardus") then
         return false
     end
 
@@ -155,13 +147,22 @@ local function cariSemuaSlotGudangKosong()
     for _, modelGudang in ipairs(daftarRakGudang) do
         local inputRak = modelGudang:FindFirstChild("InputRak")
         if inputRak then
-            for i = 1, MAX_SLOT_GUDANG do
-                local slotPart = inputRak:FindFirstChild("Rak" .. tostring(i))
-                if slotPart and apakahSlotGudangKosong(slotPart, i) then
-                    table.insert(daftarSlotKosong, {
-                        part = slotPart,
-                        index = i
-                    })
+            local daftarSlotRak = {}
+            for _, childSlot in ipairs(inputRak:GetChildren()) do
+                if childSlot.Name:lower():match("^rak%d+$") then
+                    table.insert(daftarSlotRak, childSlot)
+                end
+            end
+
+            table.sort(daftarSlotRak, function(a, b)
+                local numA = tonumber(a.Name:match("%d+")) or 9999
+                local numB = tonumber(b.Name:match("%d+")) or 9999
+                return numA < numB
+            end)
+
+            for _, slotObj in ipairs(daftarSlotRak) do
+                if apakahSlotGudangKosong(slotObj) then
+                    table.insert(daftarSlotKosong, slotObj)
                 end
             end
         end
@@ -309,9 +310,7 @@ local function jalankanSiklusGudang(sekaliJalan)
                     break
                 end
 
-                local targetInfo = daftarSlotKosong[1]
-                local targetSlot = targetInfo and targetInfo.part
-                local targetIdx = targetInfo and targetInfo.index
+                local targetSlot = daftarSlotKosong[1]
                 if not targetSlot or not targetSlot.Parent then break end
 
                 local picked = cariKardusPickedDiKarakter()
@@ -330,7 +329,7 @@ local function jalankanSiklusGudang(sekaliJalan)
                 local terkonfirmasi = false
                 for _ = 1, 14 do
                     task.wait(0.10)
-                    if not cariKardusPickedDiKarakter() or not apakahSlotGudangKosong(targetSlot, targetIdx) then
+                    if not cariKardusPickedDiKarakter() or not apakahSlotGudangKosong(targetSlot) then
                         terkonfirmasi = true
                         break
                     end
