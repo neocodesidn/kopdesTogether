@@ -18,13 +18,14 @@ local PlotToko = Workspace:WaitForChild("Plot1")
 local clickObject = PlotToko:WaitForChild("ClickObject")
 
 -- ==========================================
--- KONFIGURASI AUTO GUDANG
+-- KONFIGURASI AUTO GUDANG & ANTI-BENTROK
 -- ==========================================
 local autoGudangEnabled = false
 local jedaAntarSlot = 0.25
 local sedangMenyimpan = false
 
 local slotDitolakServer = {}
+local slotTerkunciLokal = {}
 local kardusDitolakSementara = {}
 local slotTerakhirDitembak = nil
 local percobaanGagalTangan = 0
@@ -41,7 +42,8 @@ if NotifikasiRemote and NotifikasiRemote:IsA("RemoteEvent") then
         if typeof(pesan) == "string" and slotTerakhirDitembak then
             local pLower = pesan:lower()
             if pLower:find("sudah terisi") or pLower:find("penuh") or pLower:find("tidak sesuai") then
-                slotDitolakServer[slotTerakhirDitembak] = tick() + 60
+                slotDitolakServer[slotTerakhirDitembak] = tick() + 120
+                slotTerkunciLokal[slotTerakhirDitembak] = true
             end
         end
     end)
@@ -107,19 +109,39 @@ local function ambilDaftarKardusLantai()
 end
 
 -- ==========================================
--- PEMINDAIAN SLOT GUDANG KOSONG
--- RakPenyimpananX.InputRak.RakX (Kosong jika tidak ada child .Kardus)
+-- PEMINDAIAN SLOT GUDANG KOSONG (ANTI-BENTROK KETAT)
+-- RakPenyimpananX.InputRak.RakX
 -- ==========================================
 local function apakahSlotGudangKosong(slotObj)
     if not slotObj or not slotObj.Parent then return false end
 
+    -- 1. Kunci lokal (mencegah double-fire sebelum replikasi selesai)
+    if slotTerkunciLokal[slotObj] then
+        return false
+    end
+
+    -- 2. Cooldown penolakan server
     if slotDitolakServer[slotObj] and tick() < slotDitolakServer[slotObj] then
         return false
     end
 
-    -- Jika di dalam RakX sudah ada .Kardus, berarti sudah terisi -> skip
-    if slotObj:FindFirstChild("Kardus") then
-        return false
+    -- 3. Cek langsung child bernama Kardus / KardusX atau Model di dalam RakX
+    for _, child in ipairs(slotObj:GetChildren()) do
+        local namaLower = child.Name:lower()
+        if namaLower:find("kardus") or child:IsA("Model") then
+            return false
+        end
+    end
+
+    -- 4. Cek atribut slot jika server menandai status terisi
+    for attrName, attrVal in pairs(slotObj:GetAttributes()) do
+        local aLower = attrName:lower()
+        if (aLower:find("isi") or aLower:find("occupied") or aLower:find("full") or aLower:find("terisi")) and attrVal == true then
+            return false
+        end
+        if (aLower:find("item") or aLower:find("product") or aLower:find("barang")) and typeof(attrVal) == "string" and attrVal ~= "" then
+            return false
+        end
     end
 
     return true
@@ -322,14 +344,19 @@ local function jalankanSiklusGudang(sekaliJalan)
 
                 if not picked then break end
 
-                -- TAHAP 2 SAJA: PlaceOil ke RakPenyimpananX.InputRak.RakX (TANPA PlaceOilDone)
+                -- Kunci slot lokal seketika sebelum tembak remote agar tidak pernah bentrok
+                slotTerkunciLokal[targetSlot] = true
                 slotTerakhirDitembak = targetSlot
+
+                -- TAHAP 2 SAJA: PlaceOil ke RakPenyimpananX.InputRak.RakX (TANPA PlaceOilDone)
                 PlaceOilRemote:FireServer(targetSlot)
 
                 local terkonfirmasi = false
                 for _ = 1, 14 do
                     task.wait(0.10)
-                    if not cariKardusPickedDiKarakter() or not apakahSlotGudangKosong(targetSlot) then
+                    local masihDiTangan = cariKardusPickedDiKarakter()
+                    local adaKardusDiSlot = targetSlot:FindFirstChild("Kardus") ~= nil
+                    if not masihDiTangan or adaKardusDiSlot then
                         terkonfirmasi = true
                         break
                     end
@@ -341,7 +368,9 @@ local function jalankanSiklusGudang(sekaliJalan)
                     perbaruiStatusUI()
                     task.wait(jedaAntarSlot)
                 else
-                    slotDitolakServer[targetSlot] = tick() + 45
+                    -- Jika gagal masuk, buka kunci lokal dan masukkan ke blacklist sementara 60 detik
+                    slotTerkunciLokal[targetSlot] = nil
+                    slotDitolakServer[targetSlot] = tick() + 60
                     percobaanGagalTangan = percobaanGagalTangan + 1
                     if percobaanGagalTangan >= 2 then
                         lepasKardusStuckDiTangan()
@@ -364,7 +393,7 @@ local function jalankanSiklusGudang(sekaliJalan)
 end
 
 -- ==========================================
--- TRIGGER EVENT-DRIVEN (ANTI-LAG TANPA LOOPING)
+-- TRIGGER EVENT-DRIVEN (ANTI-LAG & REALTIME SYNC)
 -- ==========================================
 clickObject.ChildAdded:Connect(function(child)
     if child.Name == "Kardus" then
@@ -379,6 +408,16 @@ end)
 clickObject.ChildRemoved:Connect(function(child)
     if child.Name == "Kardus" and not sedangMenyimpan then
         perbaruiStatusUI()
+    end
+end)
+
+-- Jika kardus di dalam RakGudang diambil manual/NPC, buka kunci slotnya otomatis
+PlotToko.DescendantRemoving:Connect(function(desc)
+    if desc.Name:lower():find("kardus") and desc.Parent and desc.Parent.Name:lower():match("^rak%d+$") then
+        local slotObj = desc.Parent
+        slotTerkunciLokal[slotObj] = nil
+        slotDitolakServer[slotObj] = nil
+        task.defer(perbaruiStatusUI)
     end
 end)
 
@@ -422,6 +461,7 @@ end)
 
 API.Button(GudangTab, "Refresh Data", function()
     slotDitolakServer = {}
+    slotTerkunciLokal = {}
     kardusDitolakSementara = {}
     percobaanGagalTangan = 0
     perbaruiStatusUI()
