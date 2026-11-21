@@ -12,29 +12,9 @@ local RemotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
 local NotifikasiRemote = RemotesFolder and RemotesFolder:FindFirstChild("Notifikasi")
 
 -- ==========================================
--- DETEKSI OTOMATIS PLOT MILIK SENDIRI
+-- LANGSUNG KE Workspace.Plot1
 -- ==========================================
-local function dapatkanPlotToko()
-    local lp = API.LocalPlayer
-    for _, obj in ipairs(Workspace:GetChildren()) do
-        if obj.Name:match("^Plot%d+$") and obj:FindFirstChild("ClickObject") then
-            local ownerAttr = obj:GetAttribute("Owner") or obj:GetAttribute("UserId")
-            if ownerAttr == lp.Name or ownerAttr == lp.UserId then
-                return obj
-            end
-            for _, val in ipairs(obj:GetDescendants()) do
-                if (val:IsA("StringValue") and val.Value == lp.Name)
-                    or (val:IsA("IntValue") and val.Value == lp.UserId)
-                    or (val:IsA("ObjectValue") and val.Value == lp) then
-                    return obj
-                end
-            end
-        end
-    end
-    return (API and API.Plot) or Workspace:WaitForChild("Plot1")
-end
-
-local PlotToko = dapatkanPlotToko()
+local PlotToko = Workspace:WaitForChild("Plot1")
 local clickObject = PlotToko:WaitForChild("ClickObject")
 
 -- ==========================================
@@ -129,8 +109,8 @@ local function ambilDaftarKardusLantai()
 end
 
 -- ==========================================
--- PEMINDAIAN SLOT GUDANG KOSONG
--- RakPenyimpananX.InputRak.RakX.Kardus
+-- PEMINDAIAN SLOT GUDANG KOSONG DI Plot1
+-- RakPenyimpananX.InputRak.RakX
 -- ==========================================
 local function apakahSlotGudangKosong(rakPart, indexSlot)
     if not rakPart or not rakPart:IsA("BasePart") then return false end
@@ -139,14 +119,14 @@ local function apakahSlotGudangKosong(rakPart, indexSlot)
         return false
     end
 
-    -- Cek langsung jika di dalam RakX sudah ada child "Kardus"
+    -- Cek langsung jika di dalam RakX sudah ada child bernama "Kardus"
     if rakPart:FindFirstChild("Kardus") then
         return false
     end
 
-    -- Cek juga jika strukturnya RakX -> KardusX -> Kardus
+    -- Cek jika ada folder/part Kardus1..6 dan di dalamnya sudah ada "Kardus"
     local subKardus = rakPart:FindFirstChild("Kardus" .. tostring(indexSlot))
-    if subKardus and (subKardus:FindFirstChild("Kardus") or #subKardus:GetChildren() > 0) then
+    if subKardus and subKardus:FindFirstChild("Kardus") then
         return false
     end
 
@@ -156,10 +136,12 @@ end
 local function cariSemuaSlotGudangKosong()
     local daftarSlotKosong = {}
     local daftarRakGudang = {}
+    local sudahTercatat = {}
 
-    for _, model in ipairs(clickObject:GetChildren()) do
-        if model.Name:lower():match("^rakpenyimpanan%d+$") and model:FindFirstChild("InputRak") then
-            table.insert(daftarRakGudang, model)
+    for _, desc in ipairs(PlotToko:GetDescendants()) do
+        if not sudahTercatat[desc] and desc.Name:lower():find("rakpenyimpanan") and desc:FindFirstChild("InputRak") then
+            sudahTercatat[desc] = true
+            table.insert(daftarRakGudang, desc)
         end
     end
 
@@ -302,12 +284,12 @@ local StatusGudangCard
 local function perbaruiStatusUI()
     if not StatusGudangCard then return end
 
-    local slotKosong = cariSemuaSlotGudangKosong()
+    local slotKosong, totalRak = cariSemuaSlotGudangKosong()
     local kardusLantai = ambilDaftarKardusLantai()
 
     API.SetElementText(
         StatusGudangCard,
-        "Slot Gudang Kosong: " .. tostring(#slotKosong) .. "  |  Kardus di Lantai: " .. tostring(#kardusLantai),
+        "Slot Gudang Kosong: " .. tostring(#slotKosong) .. " (" .. tostring(totalRak) .. " Rak)  |  Kardus di Lantai: " .. tostring(#kardusLantai),
         "Status: " .. (autoGudangEnabled and "Aktif" or "Nonaktif")
     )
 end
@@ -409,7 +391,7 @@ local GudangTab = API.CreateTab("[RESTOCK] Gudang")
 -- 1. ATAS: DATA SLOT GUDANG KOSONG & KARDUS LANTAI
 StatusGudangCard = API.Paragraph(
     GudangTab,
-    "Slot Gudang Kosong: 0  |  Kardus di Lantai: 0",
+    "Slot Gudang Kosong: 0 (0 Rak)  |  Kardus di Lantai: 0",
     "Status: Nonaktif"
 )
 
