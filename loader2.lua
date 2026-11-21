@@ -19,7 +19,7 @@ local DaftarPlugin = {
     { id = "input",         name = "[RESTOCK] Makanan",             file = "auto_makanan.lua" },
     { id = "kulkas",        name = "[RESTOCK] Kulkas",              file = "auto_kulkas.lua" },
     { id = "sayuran",       name = "[RESTOCK] Sayuran",             file = "auto_sayuran.lua" },
-    --{ id = "gudang",        name = "Auto Gudang (RakPenyimpanan)",  file = "auto_gudang.lua" },
+    { id = "gudang",        name = "Auto Gudang (RakPenyimpanan)",  file = "auto_gudang.lua" },
     { id = "payroll",       name = "Auto Payroll & Deposit",        file = "auto_payroll.lua" },
     { id = "smart_payroll", name = "Smart Payroll (Profit Share)",  file = "smart_payroll.lua" },
     { id = "sewa_pekerja",  name = "Sewa Pekerja (NPC Staff)",      file = "sewa_pekerja.lua" },
