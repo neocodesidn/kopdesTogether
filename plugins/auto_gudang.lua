@@ -109,8 +109,8 @@ local function ambilDaftarKardusLantai()
 end
 
 -- ==========================================
--- PEMINDAIAN SLOT GUDANG KOSONG (ANTI-BENTROK KETAT)
--- RakPenyimpananX.InputRak.RakX
+-- PEMINDAIAN SLOT GUDANG KOSONG
+-- RakPenyimpananX.InputRak.RakX (Kosong jika tidak ada child persis "Kardus")
 -- ==========================================
 local function apakahSlotGudangKosong(slotObj)
     if not slotObj or not slotObj.Parent then return false end
@@ -125,23 +125,9 @@ local function apakahSlotGudangKosong(slotObj)
         return false
     end
 
-    -- 3. Cek langsung child bernama Kardus / KardusX atau Model di dalam RakX
-    for _, child in ipairs(slotObj:GetChildren()) do
-        local namaLower = child.Name:lower()
-        if namaLower:find("kardus") or child:IsA("Model") then
-            return false
-        end
-    end
-
-    -- 4. Cek atribut slot jika server menandai status terisi
-    for attrName, attrVal in pairs(slotObj:GetAttributes()) do
-        local aLower = attrName:lower()
-        if (aLower:find("isi") or aLower:find("occupied") or aLower:find("full") or aLower:find("terisi")) and attrVal == true then
-            return false
-        end
-        if (aLower:find("item") or aLower:find("product") or aLower:find("barang")) and typeof(attrVal) == "string" and attrVal ~= "" then
-            return false
-        end
+    -- 3. Cek persis child bernama "Kardus" di dalam RakX (sesuai hierarki game)
+    if slotObj:FindFirstChild("Kardus") then
+        return false
     end
 
     return true
@@ -413,7 +399,7 @@ end)
 
 -- Jika kardus di dalam RakGudang diambil manual/NPC, buka kunci slotnya otomatis
 PlotToko.DescendantRemoving:Connect(function(desc)
-    if desc.Name:lower():find("kardus") and desc.Parent and desc.Parent.Name:lower():match("^rak%d+$") then
+    if desc.Name == "Kardus" and desc.Parent and desc.Parent.Name:lower():match("^rak%d+$") then
         local slotObj = desc.Parent
         slotTerkunciLokal[slotObj] = nil
         slotDitolakServer[slotObj] = nil
