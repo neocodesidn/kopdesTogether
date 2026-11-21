@@ -75,17 +75,17 @@ end
 local QuestTab = API.CreateTab("Quest")
 API.Section(QuestTab, "Misi Otomatis")
 
-API.Toggle(QuestTab, "Auto Klaim Misi yang Sudah Selesai", false, function(val)
+API.Toggle(QuestTab, "Auto Claim Quest Yang Sudah Selesai", false, function(val)
     autoClaimQuestEnabled = val
     if val then task.spawn(cekDanClaimQuests, false) end
     API.Notify(
-        val and "Misi Otomatis Aktif" or "Misi Otomatis Dimatikan",
-        val and "Misi yang sudah selesai otomatis diambil." or "Mekanisme auto misi dimatikan.",
+        val and "Auto Claim Quest ON" or "Auto Claim Quest OFF",
+        val and "Misi yang sudah selesai otomatis diambil." or "Auto claim quest off.",
         3
     )
 end)
 
-API.Button(QuestTab, "Cek & Ambil Semua Misi Sekarang", function()
+API.Button(QuestTab, "Claim All Quest", function()
     task.spawn(cekDanClaimQuests, true)
 end)
 
