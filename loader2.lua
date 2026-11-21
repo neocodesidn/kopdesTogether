@@ -15,6 +15,7 @@ local REPO_PLUGINS = REPO_BASE .. "plugins/"
 local CustomUI = loadstring(game:HttpGet(REPO_BASE .. "core/ui.lua?t=" .. tostring(os.time())))()
 
 local DaftarPlugin = {
+    { id = "smart_restock", name = "Smart Restock",                 file = "smart_restock.lua" },
     { id = "restok",        name = "[AUTO BUY] Kardus",             file = "auto_restok.lua" },
     { id = "input",         name = "[RESTOCK] Makanan",             file = "auto_makanan.lua" },
     { id = "kulkas",        name = "[RESTOCK] Kulkas",              file = "auto_kulkas.lua" },
