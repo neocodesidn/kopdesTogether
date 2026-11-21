@@ -39,7 +39,7 @@ local PlotToko = dapatkanPlotToko()
 local clickObject = PlotToko:WaitForChild("ClickObject")
 
 -- ==========================================
--- DAFTAR PRODUK SAYURAN DARI ReplicatedStorage.Product.Sayuran (Lisensi_X)
+-- DAFTAR PRODUK SAYURAN DARI ReplicatedStorage.Product.Sayuran (Default & Lisensi_X)
 -- ==========================================
 local daftarProdukSayuran = {}
 
@@ -50,7 +50,8 @@ local function muatDaftarSayuran()
     if not folderSayuran then return end
 
     for _, lisensiFolder in ipairs(folderSayuran:GetChildren()) do
-        if lisensiFolder.Name:lower():find("^lisensi") then
+        local namaSub = lisensiFolder.Name:lower()
+        if namaSub == "default" or namaSub:find("^lisensi") or namaSub:find("^license") then
             for _, item in ipairs(lisensiFolder:GetChildren()) do
                 daftarProdukSayuran[item.Name:lower()] = item.Name
             end
@@ -179,6 +180,12 @@ end
 -- ==========================================
 -- PEMINDAIAN SLOT RAK SAYURAN KOSONG (RakSayuran1..X -> Rak1..Rak6)
 -- ==========================================
+local function dapatkanFolderItemSlot(rakPart)
+    return rakPart:FindFirstChild("ClientItemInstances")
+        or rakPart:FindFirstChild("InstacesItem")
+        or rakPart:FindFirstChild("InstanceItem")
+end
+
 local function apakahSlotSayuranKosong(rakPart)
     if not rakPart or not rakPart:IsA("BasePart") then return false end
 
@@ -186,7 +193,7 @@ local function apakahSlotSayuranKosong(rakPart)
         return false
     end
 
-    local clientInstances = rakPart:FindFirstChild("ClientItemInstances")
+    local clientInstances = dapatkanFolderItemSlot(rakPart)
     if clientInstances and #clientInstances:GetChildren() > 0 then
         return false
     end
@@ -279,22 +286,19 @@ local function lepasKardusStuckDiTangan()
     end
 
     if cariKardusPickedDiKarakter() then
-        for _, modelRak in ipairs(clickObject:GetChildren()) do
-            if modelRak.Name:lower():find("^rakpenyimpanan") then
+        for _, modelRak in ipairs(PlotToko:GetDescendants()) do
+            if modelRak.Name:lower():find("rakpenyimpanan") then
                 local inputRak = modelRak:FindFirstChild("InputRak")
                 if inputRak then
                     for i = 1, 6 do
                         local slotGudang = inputRak:FindFirstChild("Rak" .. tostring(i))
-                        if slotGudang and not (slotDitolakServer[slotGudang] and tick() < slotDitolakServer[slotGudang]) then
-                            local kc = slotGudang:FindFirstChild("Kardus" .. tostring(i))
-                            if not kc or not kc:FindFirstChild("Kardus") then
-                                slotTerakhirDitembak = slotGudang
-                                PlaceOilRemote:FireServer(slotGudang)
-                                task.wait(0.15)
-                                if not cariKardusPickedDiKarakter() then
-                                    percobaanGagalTangan = 0
-                                    return
-                                end
+                        if slotGudang and not slotGudang:FindFirstChild("Kardus") and not (slotDitolakServer[slotGudang] and tick() < slotDitolakServer[slotGudang]) then
+                            slotTerakhirDitembak = slotGudang
+                            PlaceOilRemote:FireServer(slotGudang)
+                            task.wait(0.15)
+                            if not cariKardusPickedDiKarakter() then
+                                percobaanGagalTangan = 0
+                                return
                             end
                         end
                     end
@@ -382,19 +386,33 @@ local function ambilSatuKardusSayuran(detailKardus)
 end
 
 -- ==========================================
--- UPDATE UI STATUS & EKSEKUSI UTAMA
+-- UPDATE UI STATUS & EKSEKUSI REAL-TIME
 -- ==========================================
 local StatusSayuranCard
+local lastSlotSayuran = -1
+local lastKardusSayuran = -1
+local lastToggleSayuran = nil
 
-local function perbaruiStatusUI()
+local function perbaruiStatusUI(slotOpsional, kardusOpsional)
     if not StatusSayuranCard then return end
 
-    local slotKosong = cariSemuaSlotSayuranKosong()
-    local kardusSayuran = ambilDaftarKardusSayuran()
+    local slotKosong = slotOpsional or cariSemuaSlotSayuranKosong()
+    local kardusSayuran = kardusOpsional or ambilDaftarKardusSayuran()
+
+    local jmlSlot = #slotKosong
+    local jmlKardus = #kardusSayuran
+
+    if jmlSlot == lastSlotSayuran and jmlKardus == lastKardusSayuran and autoSayuranEnabled == lastToggleSayuran then
+        return
+    end
+
+    lastSlotSayuran = jmlSlot
+    lastKardusSayuran = jmlKardus
+    lastToggleSayuran = autoSayuranEnabled
 
     API.SetElementText(
         StatusSayuranCard,
-        "Slot Kosong: " .. tostring(#slotKosong) .. "  |  Kardus Sayuran: " .. tostring(#kardusSayuran),
+        "Slot Kosong: " .. tostring(jmlSlot) .. "  |  Kardus Sayuran: " .. tostring(jmlKardus),
         "Status: " .. (autoSayuranEnabled and "Aktif" or "Nonaktif")
     )
 end
@@ -486,8 +504,46 @@ local function jalankanSiklusSayuran(sekaliJalan)
 end
 
 -- ==========================================
--- TRIGGER EVENT-DRIVEN (ANTI-LAG TANPA LOOPING)
+-- LISTENER REAL-TIME RAK SAYURAN + LANTAI
 -- ==========================================
+local rakSayuranListener = {}
+
+local function pasangListenerRakSayuran(modelRak)
+    if rakSayuranListener[modelRak] then return end
+    if not modelRak.Name:lower():match("^raksayuran%d+$") then return end
+
+    local inputRak = modelRak:FindFirstChild("InputRak")
+    if not inputRak then return end
+
+    rakSayuranListener[modelRak] = true
+
+    for i = 1, MAX_SLOT_SAYURAN do
+        local slotPart = inputRak:FindFirstChild("Rak" .. tostring(i))
+        if slotPart then
+            local folderItem = dapatkanFolderItemSlot(slotPart)
+            if folderItem then
+                folderItem.ChildRemoved:Connect(function()
+                    if #folderItem:GetChildren() == 0 then
+                        perbaruiStatusUI()
+                        if autoSayuranEnabled and not sedangMengisi then
+                            jalankanSiklusSayuran(false)
+                        end
+                    end
+                end)
+                folderItem.ChildAdded:Connect(function()
+                    if not sedangMengisi then
+                        perbaruiStatusUI()
+                    end
+                end)
+            end
+        end
+    end
+end
+
+for _, model in ipairs(clickObject:GetChildren()) do
+    pasangListenerRakSayuran(model)
+end
+
 clickObject.ChildAdded:Connect(function(child)
     if child.Name == "Kardus" then
         task.wait(0.25)
@@ -495,6 +551,10 @@ clickObject.ChildAdded:Connect(function(child)
         if autoSayuranEnabled then
             jalankanSiklusSayuran(false)
         end
+    elseif child.Name:lower():match("^raksayuran%d+$") then
+        task.wait(0.25)
+        pasangListenerRakSayuran(child)
+        perbaruiStatusUI()
     end
 end)
 
@@ -528,6 +588,7 @@ API.Section(SayuranTab, "Kontrol")
 
 API.Toggle(SayuranTab, "Auto Isi Rak Sayuran", false, function(val)
     autoSayuranEnabled = val
+    lastToggleSayuran = nil
     perbaruiStatusUI()
     if val then
         jalankanSiklusSayuran(false)
@@ -546,9 +607,26 @@ API.Button(SayuranTab, "Refresh Data", function()
     slotDitolakServer = {}
     kardusDitolakSementara = {}
     percobaanGagalTangan = 0
+    lastSlotSayuran = -1
     muatDaftarSayuran()
+    for _, model in ipairs(clickObject:GetChildren()) do
+        pasangListenerRakSayuran(model)
+    end
     perbaruiStatusUI()
     API.Notify("Diperbarui", "Data slot dan kardus sayuran diperbarui.", 2)
+end)
+
+-- Sinkronisasi ringan setiap 0.6 detik tanpa GetDescendants (0% lag)
+task.spawn(function()
+    while true do
+        task.wait(0.6)
+        local slotKosong = cariSemuaSlotSayuranKosong()
+        local kardusSayuran = ambilDaftarKardusSayuran()
+        perbaruiStatusUI(slotKosong, kardusSayuran)
+        if autoSayuranEnabled and not sedangMengisi and #slotKosong > 0 and #kardusSayuran > 0 then
+            jalankanSiklusSayuran(false)
+        end
+    end
 end)
 
 perbaruiStatusUI()
