@@ -2,7 +2,6 @@ local API = ...
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = API.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local QuestRemotes = ReplicatedStorage:WaitForChild("QuestRemotes", 10)
 local GetQuestsRemote = QuestRemotes and QuestRemotes:FindFirstChild("GetQuests")
@@ -12,23 +11,28 @@ local RemotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
 local NotifikasiRemote = RemotesFolder and RemotesFolder:FindFirstChild("Notifikasi")
 
 -- ==========================================
--- KONFIGURASI AUTO CLAIM QUEST (EVENT-DRIVEN)
+-- KONFIGURASI AUTO CLAIM QUEST (REAL-TIME RINGAN)
 -- ==========================================
 local autoQuestEnabled = false
 local sedangCekQuest = false
 local timerDebounceAktif = false
 local totalBerhasilClaim = 0
+local waktuCekTerakhir = 0
 
 local StatusQuestCard
+local lastJudulUI = ""
+local lastSubUI = ""
 
 local function perbaruiStatusUI(teksJudul, teksSub)
-    if StatusQuestCard then
-        API.SetElementText(StatusQuestCard, teksJudul, teksSub)
-    end
+    if not StatusQuestCard then return end
+    if teksJudul == lastJudulUI and teksSub == lastSubUI then return end
+    lastJudulUI = teksJudul
+    lastSubUI = teksSub
+    API.SetElementText(StatusQuestCard, teksJudul, teksSub)
 end
 
 -- ==========================================
--- FUNGSI CEK & CLAIM QUEST (DIPANGGIL HANYA SAAT ADA TRIGGER)
+-- FUNGSI CEK & CLAIM QUEST
 -- ==========================================
 local function cekDanClaimQuest(dariTombolManual)
     if sedangCekQuest then return 0 end
@@ -38,9 +42,10 @@ local function cekDanClaimQuest(dariTombolManual)
     end
 
     sedangCekQuest = true
+    waktuCekTerakhir = tick()
+
     local jumlahClaimBaru = 0
     local jumlahAktif = 0
-    local jumlahSiapClaim = 0
 
     local ok, dataQuest = pcall(function()
         return GetQuestsRemote:InvokeServer()
@@ -56,8 +61,6 @@ local function cekDanClaimQuest(dariTombolManual)
                 or (q.def and typeof(q.def.target) == "number" and typeof(q.progress) == "number" and q.progress >= q.def.target)
 
             if siapClaim and not q.claimed and typeof(q.uid) == "string" then
-                jumlahSiapClaim = jumlahSiapClaim + 1
-
                 local okClaim, resClaim = pcall(function()
                     return ClaimQuestRemote:InvokeServer(q.uid)
                 end)
@@ -97,15 +100,18 @@ local function cekDanClaimQuest(dariTombolManual)
 end
 
 -- ==========================================
--- DEBOUNCE TRIGGER (MENCEGAH SPAM SAAT BANYAK EVENT)
+-- TRIGGER CEPAT SAAT ADA TRANSAKSI / NOTIFIKASI
 -- ==========================================
-local function jadwalkanPengecekanQuest()
+local function jadwalkanPengecekanCepat()
     if not autoQuestEnabled or timerDebounceAktif or sedangCekQuest then
+        return
+    end
+    if (tick() - waktuCekTerakhir) < 1.2 then
         return
     end
 
     timerDebounceAktif = true
-    task.delay(1.5, function()
+    task.delay(0.8, function()
         timerDebounceAktif = false
         if autoQuestEnabled then
             cekDanClaimQuest(false)
@@ -113,48 +119,42 @@ local function jadwalkanPengecekanQuest()
     end)
 end
 
--- ==========================================
--- LISTENER EVENT-DRIVEN (TANPA LOOPING)
--- ==========================================
--- 1. Trigger saat muncul teks "Claim" / "Klaim" / indikator selesai di GUI
-PlayerGui.DescendantAdded:Connect(function(desc)
-    if not autoQuestEnabled then return end
-    if desc:IsA("TextLabel") or desc:IsA("TextButton") then
-        local txt = desc.Text:lower()
-        if txt:find("claim") or txt:find("klaim") or txt:find("selesai") or txt:find("complete") or txt:find("quest") then
-            jadwalkanPengecekanQuest()
-        end
-    elseif desc.Name:lower():find("notif") or desc.Name:lower():find("badge") or desc.Name:lower():find("dot") or desc.Name:lower():find("quest") then
-        jadwalkanPengecekanQuest()
-    end
-end)
-
--- 2. Trigger saat ada notifikasi dari server (misalnya quest selesai / progres tercapai)
 if NotifikasiRemote and NotifikasiRemote:IsA("RemoteEvent") then
     NotifikasiRemote.OnClientEvent:Connect(function(pesan)
         if not autoQuestEnabled then return end
         if typeof(pesan) == "string" then
             local pLower = pesan:lower()
             if pLower:find("quest") or pLower:find("misi") or pLower:find("selesai") or pLower:find("klaim") or pLower:find("claim") then
-                jadwalkanPengecekanQuest()
+                jadwalkanPengecekanCepat()
             end
         end
     end)
 end
 
--- 3. Trigger saat uang / EXP player bertambah (indikator transaksi kasir / defeatThief / buyBox selesai)
 local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
 if leaderstats then
     for _, stat in ipairs(leaderstats:GetChildren()) do
         if stat:IsA("ValueBase") then
             stat.Changed:Connect(function()
                 if autoQuestEnabled then
-                    jadwalkanPengecekanQuest()
+                    jadwalkanPengecekanCepat()
                 end
             end)
         end
     end
 end
+
+-- ==========================================
+-- LOOP SINKRONISASI REAL-TIME RINGAN (3 DETIK, 0% LAG)
+-- ==========================================
+task.spawn(function()
+    while true do
+        task.wait(3)
+        if autoQuestEnabled and not sedangCekQuest and (tick() - waktuCekTerakhir) >= 2.8 then
+            cekDanClaimQuest(false)
+        end
+    end
+end)
 
 -- ==========================================
 -- UI TAB: QUEST
@@ -165,13 +165,13 @@ API.Section(QuestTab, "Auto Klaim Misi")
 StatusQuestCard = API.Paragraph(
     QuestTab,
     "Quest Aktif: -  |  Total Diklaim: 0",
-    "Status: Nonaktif (Menunggu notifikasi misi baru)"
+    "Status: Nonaktif"
 )
 
 API.Toggle(QuestTab, "Auto Klaim Misi Otomatis", false, function(val)
     autoQuestEnabled = val
     if val then
-        API.Notify("Misi Otomatis Aktif", "Mengecek misi yang siap diambil & memantau perubahan secara otomatis.", 2)
+        API.Notify("Misi Otomatis Aktif", "Mengecek misi yang siap diambil & memantau secara real-time.", 2)
         task.spawn(function()
             cekDanClaimQuest(false)
         end)
