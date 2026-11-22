@@ -46,6 +46,14 @@ local function safeInvoke(action, arg)
     return result
 end
 
+local function cekSpeakerDiPlot()
+    local plots = Workspace:FindFirstChild("Plots")
+    if plots then
+        return plots:FindFirstChild("SoundSystem", true)
+    end
+    return Workspace:FindFirstChild("SoundSystem", true)
+end
+
 local function canPreloadAudio(assetId)
     local tempSound = Instance.new("Sound")
     tempSound.SoundId = "rbxassetid://" .. tostring(assetId)
@@ -103,8 +111,19 @@ local function perbaruiStatusUI()
     API.SetElementText(
         StatusSoundCard,
         "Sound System: " .. (isPlaying and ("MEMUTAR - " .. cariJudulDariId(currentId)) or "Berhenti"),
-        "Volume: " .. tostring(currentVol) .. "% | Pilihan Preset (#" .. tostring(selectedSongIndex) .. "): " .. namaPilihan
+        "Volume: " .. tostring(currentVol) .. "% | Pilihan (#" .. tostring(selectedSongIndex) .. "): " .. namaPilihan
     )
+end
+
+local function pastikanSesiTerbuka()
+    local res = safeInvoke("Open", nil)
+    if res and res.ok then
+        return true, res
+    end
+    local alasan = (type(res) == "table" and (res.message or res.msg or res.reason or res.error))
+        or (cekSpeakerDiPlot() == nil and "Speaker SoundSystem belum terpasang di plot/toko kamu!")
+        or "Server menolak membuka sesi SoundSystem."
+    return false, alasan
 end
 
 -- ==========================================
@@ -123,14 +142,22 @@ local function putarLaguPreset(index)
     end
 
     isBusy = true
-    safeInvoke("Open", nil)
+    local openOk, openErr = pastikanSesiTerbuka()
+    if not openOk then
+        isBusy = false
+        API.Notify("Sesi Ditolak", tostring(openErr), 4)
+        return
+    end
+
     local res = safeInvoke("PlayListed", song.ID)
     isBusy = false
 
     if res and res.ok then
         API.Notify("Memutar Lagu", song.Title, 3)
     else
-        API.Notify("Gagal Memutar", "Lagu belum tersedia di server.", 3)
+        local msg = (type(res) == "table" and (res.message or res.msg or res.reason or res.error))
+            or "Lagu belum tersedia di server."
+        API.Notify("Gagal Memutar", tostring(msg), 3)
     end
     perbaruiStatusUI()
 end
@@ -152,12 +179,19 @@ local function putarCustomId(rawText)
     isBusy = true
     API.Notify("Mengecek Lagu", "Memvalidasi ID " .. tostring(parsedId) .. "...", 2)
 
-    safeInvoke("Open", nil)
-    local checkRes = safeInvoke("Check", parsedId)
+    local openOk, openErr = pastikanSesiTerbuka()
+    if not openOk then
+        isBusy = false
+        API.Notify("Sesi Ditolak", tostring(openErr), 4)
+        return
+    end
 
+    local checkRes = safeInvoke("Check", parsedId)
     if not (checkRes and checkRes.ok and checkRes.token) then
         isBusy = false
-        API.Notify("Ditolak Server", "Lagu belum tersedia atau tidak diizinkan.", 3)
+        local msg = (type(checkRes) == "table" and (checkRes.message or checkRes.msg or checkRes.reason or checkRes.error))
+            or "Lagu belum tersedia atau tidak diizinkan server."
+        API.Notify("Ditolak Server", tostring(msg), 3)
         return
     end
 
@@ -181,19 +215,21 @@ end
 local function matikanLagu()
     if isBusy then return end
     isBusy = true
+    safeInvoke("Open", nil)
     local res = safeInvoke("Stop", nil)
     isBusy = false
 
     if res and res.ok then
         API.Notify("Sound System", "Lagu berhasil dimatikan.", 2)
     else
-        API.Notify("Gagal", "Tidak dapat mematikan lagu.", 2)
+        API.Notify("Gagal", "Tidak dapat mematikan lagu (pastikan speaker terpasang).", 3)
     end
     perbaruiStatusUI()
 end
 
 local function aturVolume(persen)
     local vol = math.clamp((tonumber(persen) or 100) / 100, 0, 1)
+    safeInvoke("Open", nil)
     local res = safeInvoke("SetVolume", vol)
     if res and res.ok then
         API.Notify("Volume Diubah", "Volume diatur ke " .. tostring(math.floor(vol * 100)) .. "%", 2)
@@ -214,15 +250,14 @@ StatusSoundCard = API.Paragraph(
 
 API.Section(SoundTab, "Daftar Lagu Bawaan (" .. tostring(#DaftarLagu) .. " Lagu)")
 
--- Susun daftar judul untuk Dropdown jika tersedia di CustomUI
 local judulOptions = {}
 for i, song in ipairs(DaftarLagu) do
     table.insert(judulOptions, tostring(i) .. ". " .. song.Title)
 end
 
 if API.Dropdown then
-    API.Dropdown(SoundTab, "Pilih Lagu Bawaan", judulOptions, judulOptions[1], function(val)
-        local idx = tonumber(tostring(val):match("^(%d+)%."))
+    API.Dropdown(SoundTab, "Pilih Lagu Bawaan", judulOptions, judulOptions[1], function(val, idxParam)
+        local idx = tonumber(idxParam) or tonumber(val) or tonumber(tostring(val):match("^(%d+)%."))
         if idx and DaftarLagu[idx] then
             selectedSongIndex = idx
             perbaruiStatusUI()
@@ -271,7 +306,8 @@ end)
 
 API.Button(SoundTab, "Buka UI SoundChoice Bawaan Game", function()
     if _G.OpenSoundChoice then
-        _G.OpenSoundChoice()
+        local speaker = cekSpeakerDiPlot()
+        _G.OpenSoundChoice(speaker)
     else
         safeInvoke("Open", nil)
         API.Notify("Info", "Remote Open dipanggil.", 2)
@@ -291,7 +327,6 @@ else
     API.Button(SoundTab, "Volume 0% (Mute)", function() aturVolume(0) end)
 end
 
--- Listener sinkronisasi real-time jika ada pemain lain mengganti lagu/volume
 Workspace:GetAttributeChangedSignal("SoundSystemPlaying"):Connect(perbaruiStatusUI)
 Workspace:GetAttributeChangedSignal("SoundSystemSongId"):Connect(perbaruiStatusUI)
 Workspace:GetAttributeChangedSignal("SoundSystemVolume"):Connect(perbaruiStatusUI)
