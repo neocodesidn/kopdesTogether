@@ -1,10 +1,10 @@
 local API = ...
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ContentProvider = game:GetService("ContentProvider")
-local SoundService = game:GetService("SoundService")
 local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
 
+local LocalPlayer = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local SoundSystemRequest = Remotes:WaitForChild("SoundSystemRequest")
 local SoundSystemConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("SoundSystemConfig"))
@@ -12,12 +12,108 @@ local SoundSystemConfig = require(ReplicatedStorage:WaitForChild("Modules"):Wait
 local DaftarLagu = SoundSystemConfig.Songs or {}
 local isBusy = false
 local selectedSongIndex = 1
-local customIdInput = ""
 
 local StatusSoundCard
 
 -- ==========================================
--- HELPER REMOTE & PRELOAD AUDIO
+-- HELPER CARI & TRIGGER SPEAKER DI PLOT
+-- ==========================================
+local function cariSpeakerPlot()
+    local plots = Workspace:FindFirstChild("Plots")
+    if not plots then
+        return Workspace:FindFirstChild("SoundSystem", true)
+    end
+
+    for _, plot in ipairs(plots:GetChildren()) do
+        local owner = plot:GetAttribute("Owner") or plot:GetAttribute("OwnerId") or plot:GetAttribute("UserId")
+        local ownerVal = plot:FindFirstChild("Owner") or plot:FindFirstChild("OwnerId")
+        local ownerMatch = (owner == LocalPlayer.Name or owner == LocalPlayer.UserId)
+            or (ownerVal and (ownerVal.Value == LocalPlayer.Name or ownerVal.Value == LocalPlayer.UserId or ownerVal.Value == LocalPlayer))
+
+        if ownerMatch then
+            local spk = plot:FindFirstChild("SoundSystem", true)
+            if spk then return spk end
+        end
+    end
+
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local nearestSpk = nil
+    local shortestDist = math.huge
+
+    for _, desc in ipairs(plots:GetDescendants()) do
+        if desc.Name == "SoundSystem" then
+            local part = desc:IsA("BasePart") and desc or desc:FindFirstChildWhichIsA("BasePart", true)
+            if part and hrp then
+                local dist = (part.Position - hrp.Position).Magnitude
+                if dist < shortestDist then
+                    shortestDist = dist
+                    nearestSpk = desc
+                end
+            elseif not nearestSpk then
+                nearestSpk = desc
+            end
+        end
+    end
+
+    return nearestSpk
+end
+
+local function triggerSpeakerFisik(sembunyikanUIBawaan)
+    local speaker = cariSpeakerPlot()
+    if not speaker then
+        return false, "Speaker SoundSystem tidak ditemukan di plot!"
+    end
+
+    local prompt = speaker:FindFirstChildWhichIsA("ProximityPrompt", true)
+    local clickDet = speaker:FindFirstChildWhichIsA("ClickDetector", true)
+    local targetPart = speaker:IsA("BasePart") and speaker or speaker:FindFirstChildWhichIsA("BasePart", true)
+
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local posisiAwal = hrp and hrp.CFrame
+
+    local butuhGeser = false
+    if hrp and targetPart then
+        local maxDist = (prompt and prompt.MaxActivationDistance) or (clickDet and clickDet.MaxActivationDistance) or 12
+        if (hrp.Position - targetPart.Position).Magnitude > (maxDist - 1) then
+            butuhGeser = true
+            hrp.CFrame = targetPart.CFrame * CFrame.new(0, 2, 3)
+            task.wait(0.12)
+        end
+    end
+
+    local triggered = false
+    if prompt and fireproximityprompt then
+        pcall(fireproximityprompt, prompt)
+        triggered = true
+    elseif clickDet and fireclickdetector then
+        pcall(fireclickdetector, clickDet)
+        triggered = true
+    end
+
+    task.wait(0.2)
+
+    if butuhGeser and hrp and posisiAwal then
+        hrp.CFrame = posisiAwal
+    end
+
+    if sembunyikanUIBawaan then
+        task.defer(function()
+            local pg = LocalPlayer:FindFirstChild("PlayerGui")
+            local sc = pg and pg:FindFirstChild("SoundChoice")
+            local mf = sc and sc:FindFirstChild("MainFrame")
+            if mf then
+                mf.Visible = false
+            end
+        end)
+    end
+
+    return triggered, triggered and "OK" or "Executor tidak mendukung fireproximityprompt/fireclickdetector"
+end
+
+-- ==========================================
+-- HELPER REMOTE & STATUS
 -- ==========================================
 local function safeInvoke(action, arg)
     local done = false
@@ -46,49 +142,6 @@ local function safeInvoke(action, arg)
     return result
 end
 
-local function cekSpeakerDiPlot()
-    local plots = Workspace:FindFirstChild("Plots")
-    if plots then
-        return plots:FindFirstChild("SoundSystem", true)
-    end
-    return Workspace:FindFirstChild("SoundSystem", true)
-end
-
-local function canPreloadAudio(assetId)
-    local tempSound = Instance.new("Sound")
-    tempSound.SoundId = "rbxassetid://" .. tostring(assetId)
-    tempSound.Volume = 0
-    tempSound.Parent = SoundService
-
-    local loaded = false
-    local finished = false
-
-    local thread = task.spawn(function()
-        pcall(function()
-            ContentProvider:PreloadAsync({ tempSound }, function(_, status)
-                if status == Enum.AssetFetchStatus.Success then
-                    loaded = true
-                end
-            end)
-        end)
-        loaded = loaded or tempSound.IsLoaded
-        finished = true
-    end)
-
-    local timeout = os.clock() + (SoundSystemConfig.CheckTimeout or 8)
-    while not finished and os.clock() < timeout do
-        task.wait(0.05)
-    end
-
-    if not finished then
-        pcall(task.cancel, thread)
-        loaded = false
-    end
-
-    tempSound:Destroy()
-    return loaded
-end
-
 local function cariJudulDariId(songId)
     if not songId then return "-" end
     for _, song in ipairs(DaftarLagu) do
@@ -96,7 +149,7 @@ local function cariJudulDariId(songId)
             return song.Title
         end
     end
-    return "Custom ID (" .. tostring(songId) .. ")"
+    return "ID (" .. tostring(songId) .. ")"
 end
 
 local function perbaruiStatusUI()
@@ -120,9 +173,19 @@ local function pastikanSesiTerbuka()
     if res and res.ok then
         return true, res
     end
+
+    local okTrigger, triggerMsg = triggerSpeakerFisik(true)
+    if okTrigger then
+        task.wait(0.15)
+        local retryRes = safeInvoke("Open", nil)
+        if retryRes and retryRes.ok then
+            return true, retryRes
+        end
+    end
+
     local alasan = (type(res) == "table" and (res.message or res.msg or res.reason or res.error))
-        or (cekSpeakerDiPlot() == nil and "Speaker SoundSystem belum terpasang di plot/toko kamu!")
-        or "Server menolak membuka sesi SoundSystem."
+        or triggerMsg
+        or "Gagal mengaktifkan sesi speaker."
     return false, alasan
 end
 
@@ -162,74 +225,24 @@ local function putarLaguPreset(index)
     perbaruiStatusUI()
 end
 
-local function putarCustomId(rawText)
-    if isBusy then
-        API.Notify("Tunggu", "Sedang memproses pengecekan lagu...", 2)
-        return
-    end
-
-    local parsedId = (SoundSystemConfig.ParseId and SoundSystemConfig.ParseId(tostring(rawText)))
-        or tonumber(tostring(rawText):match("%d+"))
-
-    if not parsedId then
-        API.Notify("ID Tidak Valid", "Masukkan angka Asset ID lagu yang benar.", 3)
-        return
-    end
-
-    isBusy = true
-    API.Notify("Mengecek Lagu", "Memvalidasi ID " .. tostring(parsedId) .. "...", 2)
-
-    local openOk, openErr = pastikanSesiTerbuka()
-    if not openOk then
-        isBusy = false
-        API.Notify("Sesi Ditolak", tostring(openErr), 4)
-        return
-    end
-
-    local checkRes = safeInvoke("Check", parsedId)
-    if not (checkRes and checkRes.ok and checkRes.token) then
-        isBusy = false
-        local msg = (type(checkRes) == "table" and (checkRes.message or checkRes.msg or checkRes.reason or checkRes.error))
-            or "Lagu belum tersedia atau tidak diizinkan server."
-        API.Notify("Ditolak Server", tostring(msg), 3)
-        return
-    end
-
-    if not canPreloadAudio(parsedId) then
-        isBusy = false
-        API.Notify("Gagal Preload", "Audio gagal dimuat oleh client.", 3)
-        return
-    end
-
-    local playRes = safeInvoke("Play", checkRes.token)
-    isBusy = false
-
-    if playRes and playRes.ok then
-        API.Notify("Memutar Custom ID", checkRes.title or ("ID: " .. tostring(parsedId)), 3)
-    else
-        API.Notify("Gagal Memutar", "Token ditolak saat memutar lagu.", 3)
-    end
-    perbaruiStatusUI()
-end
-
 local function matikanLagu()
     if isBusy then return end
     isBusy = true
-    safeInvoke("Open", nil)
+    pastikanSesiTerbuka()
     local res = safeInvoke("Stop", nil)
     isBusy = false
 
     if res and res.ok then
         API.Notify("Sound System", "Lagu berhasil dimatikan.", 2)
     else
-        API.Notify("Gagal", "Tidak dapat mematikan lagu (pastikan speaker terpasang).", 3)
+        API.Notify("Gagal", "Tidak dapat mematikan lagu.", 3)
     end
     perbaruiStatusUI()
 end
 
 local function aturVolume(persen)
     local vol = math.clamp((tonumber(persen) or 100) / 100, 0, 1)
-    safeInvoke("Open", nil)
+    pastikanSesiTerbuka()
     local res = safeInvoke("SetVolume", vol)
     if res and res.ok then
         API.Notify("Volume Diubah", "Volume diatur ke " .. tostring(math.floor(vol * 100)) .. "%", 2)
@@ -287,30 +300,18 @@ API.Button(SoundTab, "Putar Lagu Acak (Shuffle)", function()
     putarLaguPreset(selectedSongIndex)
 end)
 
-API.Section(SoundTab, "Custom Asset ID & Kontrol")
-
-if API.Input or API.TextBox then
-    local inputFn = API.Input or API.TextBox
-    inputFn(SoundTab, "Masukkan ID Lagu (Angka)", "Contoh: 112447571198662", function(text)
-        customIdInput = text
-    end)
-end
-
-API.Button(SoundTab, "Cek & Putar Custom ID", function()
-    putarCustomId(customIdInput)
-end)
+API.Section(SoundTab, "Kontrol Speaker")
 
 API.Button(SoundTab, "Matikan Lagu (Stop)", function()
     matikanLagu()
 end)
 
-API.Button(SoundTab, "Buka UI SoundChoice Bawaan Game", function()
-    if _G.OpenSoundChoice then
-        local speaker = cekSpeakerDiPlot()
-        _G.OpenSoundChoice(speaker)
+API.Button(SoundTab, "Aktivasi & Buka UI Speaker Bawaan", function()
+    local ok, err = triggerSpeakerFisik(false)
+    if ok then
+        API.Notify("Berhasil", "Speaker di-trigger & UI bawaan dibuka.", 2)
     else
-        safeInvoke("Open", nil)
-        API.Notify("Info", "Remote Open dipanggil.", 2)
+        API.Notify("Gagal", tostring(err), 3)
     end
 end)
 
