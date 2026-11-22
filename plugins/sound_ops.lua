@@ -1,23 +1,24 @@
--- sound_ops.lua
--- Modul Kontrol Sound System (Kopdes Together)
+local API = ...
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ContentProvider = game:GetService("ContentProvider")
 local SoundService = game:GetService("SoundService")
-local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 
-local LocalPlayer = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local SoundSystemRequest = Remotes:WaitForChild("SoundSystemRequest")
-
--- Ambil konfigurasi & daftar lagu resmi langsung dari modul game
 local SoundSystemConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("SoundSystemConfig"))
 
-local SoundOps = {}
-SoundOps.Songs = SoundSystemConfig.Songs or {} -- Berisi array { Title = "...", ID = 123456 }
-SoundOps.IsBusy = false
+local DaftarLagu = SoundSystemConfig.Songs or {}
+local isBusy = false
+local selectedSongIndex = 1
+local customIdInput = ""
 
--- Helper aman untuk memanggil RemoteFunction dengan timeout
+local StatusSoundCard
+
+-- ==========================================
+-- HELPER REMOTE & PRELOAD AUDIO
+-- ==========================================
 local function safeInvoke(action, arg)
     local done = false
     local result = nil
@@ -45,7 +46,6 @@ local function safeInvoke(action, arg)
     return result
 end
 
--- Helper mengecek apakah asset audio bisa dimuat oleh client (sesuai logika game)
 local function canPreloadAudio(assetId)
     local tempSound = Instance.new("Sound")
     tempSound.SoundId = "rbxassetid://" .. tostring(assetId)
@@ -81,137 +81,219 @@ local function canPreloadAudio(assetId)
     return loaded
 end
 
--- 1. Inisialisasi sesi Sound System (wajib dipanggil sebelum memutar jika belum dibuka)
-function SoundOps.Open()
-    local res = safeInvoke("Open", nil)
-    return res ~= nil and res.ok == true, res
+local function cariJudulDariId(songId)
+    if not songId then return "-" end
+    for _, song in ipairs(DaftarLagu) do
+        if song.ID == songId then
+            return song.Title
+        end
+    end
+    return "Custom ID (" .. tostring(songId) .. ")"
 end
 
--- 2. Putar lagu dari Daftar Lagu Bawaan (Preset List) memakai ID atau Title
-function SoundOps.PlayListed(idOrTitle)
-    if SoundOps.IsBusy then
-        return false, "Sistem sedang memproses permintaan lain"
+local function perbaruiStatusUI()
+    if not StatusSoundCard then return end
+
+    local isPlaying = Workspace:GetAttribute("SoundSystemPlaying") == true
+    local currentId = Workspace:GetAttribute("SoundSystemSongId")
+    local currentVol = math.floor(((Workspace:GetAttribute("SoundSystemVolume") or 1) * 100) + 0.5)
+    local laguTerpilih = DaftarLagu[selectedSongIndex]
+    local namaPilihan = laguTerpilih and laguTerpilih.Title or "Tidak ada"
+
+    API.SetElementText(
+        StatusSoundCard,
+        "Sound System: " .. (isPlaying and ("MEMUTAR - " .. cariJudulDariId(currentId)) or "Berhenti"),
+        "Volume: " .. tostring(currentVol) .. "% | Pilihan Preset (#" .. tostring(selectedSongIndex) .. "): " .. namaPilihan
+    )
+end
+
+-- ==========================================
+-- AKSI UTAMA SOUND SYSTEM
+-- ==========================================
+local function putarLaguPreset(index)
+    local song = DaftarLagu[index]
+    if not song then
+        API.Notify("Gagal", "Lagu tidak ditemukan di daftar.", 2)
+        return
     end
 
-    local targetId = tonumber(idOrTitle)
-    local targetTitle = nil
-
-    -- Jika parameter berupa judul lagu (string), cari ID-nya di SoundSystemConfig.Songs
-    if not targetId and type(idOrTitle) == "string" then
-        local query = string.lower(idOrTitle)
-        for _, song in ipairs(SoundOps.Songs) do
-            if string.lower(song.Title) == query or string.find(string.lower(song.Title), query, 1, true) then
-                targetId = song.ID
-                targetTitle = song.Title
-                break
-            end
-        end
-    else
-        for _, song in ipairs(SoundOps.Songs) do
-            if song.ID == targetId then
-                targetTitle = song.Title
-                break
-            end
-        end
+    if isBusy then
+        API.Notify("Tunggu", "Sedang memproses permintaan audio...", 2)
+        return
     end
 
-    if not targetId then
-        return false, "Lagu tidak ditemukan di daftar bawaan"
-    end
-
-    SoundOps.IsBusy = true
-    SoundOps.Open() -- Pastikan sesi terbuka
-    local res = safeInvoke("PlayListed", targetId)
-    SoundOps.IsBusy = false
+    isBusy = true
+    safeInvoke("Open", nil)
+    local res = safeInvoke("PlayListed", song.ID)
+    isBusy = false
 
     if res and res.ok then
-        return true, targetTitle or tostring(targetId)
+        API.Notify("Memutar Lagu", song.Title, 3)
+    else
+        API.Notify("Gagal Memutar", "Lagu belum tersedia di server.", 3)
     end
-    return false, "Gagal memutar lagu dari daftar"
+    perbaruiStatusUI()
 end
 
--- 3. Cek & Putar lagu Custom ID (otomatis melewati alur Open -> Check -> Preload -> Play)
-function SoundOps.PlayCustomId(rawInput)
-    if SoundOps.IsBusy then
-        return false, "Sistem sedang memproses permintaan lain"
+local function putarCustomId(rawText)
+    if isBusy then
+        API.Notify("Tunggu", "Sedang memproses pengecekan lagu...", 2)
+        return
     end
 
-    local parsedId = SoundSystemConfig.ParseId and SoundSystemConfig.ParseId(tostring(rawInput)) or tonumber(tostring(rawInput):match("%d+"))
+    local parsedId = (SoundSystemConfig.ParseId and SoundSystemConfig.ParseId(tostring(rawText)))
+        or tonumber(tostring(rawText):match("%d+"))
+
     if not parsedId then
-        return false, "Format ID lagu tidak valid"
+        API.Notify("ID Tidak Valid", "Masukkan angka Asset ID lagu yang benar.", 3)
+        return
     end
 
-    SoundOps.IsBusy = true
-    SoundOps.Open()
+    isBusy = true
+    API.Notify("Mengecek Lagu", "Memvalidasi ID " .. tostring(parsedId) .. "...", 2)
 
-    -- Tahap 1: Check ID ke server untuk mendapatkan token & judul lagu
+    safeInvoke("Open", nil)
     local checkRes = safeInvoke("Check", parsedId)
+
     if not (checkRes and checkRes.ok and checkRes.token) then
-        SoundOps.IsBusy = false
-        return false, "ID lagu ditolak atau belum tersedia di server"
+        isBusy = false
+        API.Notify("Ditolak Server", "Lagu belum tersedia atau tidak diizinkan.", 3)
+        return
     end
 
-    -- Tahap 2: Validasi preload di client agar tidak error saat diputar
     if not canPreloadAudio(parsedId) then
-        SoundOps.IsBusy = false
-        return false, "Audio gagal dimuat oleh client (mungkin kena moderasi/private)"
+        isBusy = false
+        API.Notify("Gagal Preload", "Audio gagal dimuat oleh client.", 3)
+        return
     end
 
-    -- Tahap 3: Eksekusi Play menggunakan token dari server
     local playRes = safeInvoke("Play", checkRes.token)
-    SoundOps.IsBusy = false
+    isBusy = false
 
     if playRes and playRes.ok then
-        return true, checkRes.title or ("ID: " .. tostring(parsedId))
+        API.Notify("Memutar Custom ID", checkRes.title or ("ID: " .. tostring(parsedId)), 3)
+    else
+        API.Notify("Gagal Memutar", "Token ditolak saat memutar lagu.", 3)
     end
-
-    return false, "Gagal memutar lagu setelah validasi token"
+    perbaruiStatusUI()
 end
 
--- 4. Matikan lagu yang sedang diputar
-function SoundOps.Stop()
-    if SoundOps.IsBusy then
-        return false, "Sistem sedang sibuk"
-    end
-
-    SoundOps.IsBusy = true
+local function matikanLagu()
+    if isBusy then return end
+    isBusy = true
     local res = safeInvoke("Stop", nil)
-    SoundOps.IsBusy = false
+    isBusy = false
 
     if res and res.ok then
-        return true, "Lagu berhasil dimatikan"
+        API.Notify("Sound System", "Lagu berhasil dimatikan.", 2)
+    else
+        API.Notify("Gagal", "Tidak dapat mematikan lagu.", 2)
     end
-    return false, "Gagal mematikan lagu"
+    perbaruiStatusUI()
 end
 
--- 5. Atur Volume Global Sound System (0.0 sampai 1.0, atau 0 - 100 otomatis dikonversi)
-function SoundOps.SetVolume(level)
-    local vol = tonumber(level) or 1
-    if vol > 1 then
-        vol = vol / 100
-    end
-    vol = math.clamp(vol, 0, 1)
-
+local function aturVolume(persen)
+    local vol = math.clamp((tonumber(persen) or 100) / 100, 0, 1)
     local res = safeInvoke("SetVolume", vol)
-    return res ~= nil and res.ok == true, vol
-end
-
--- 6. Ambil daftar judul lagu siap pakai untuk Dropdown UI
-function SoundOps.GetSongTitles()
-    local list = {}
-    for _, song in ipairs(SoundOps.Songs) do
-        table.insert(list, song.Title)
+    if res and res.ok then
+        API.Notify("Volume Diubah", "Volume diatur ke " .. tostring(math.floor(vol * 100)) .. "%", 2)
     end
-    return list
+    perbaruiStatusUI()
 end
 
--- 7. Cek status pemutaran & volume saat ini dari atribut workspace
-function SoundOps.GetStatus()
-    return {
-        Playing = workspace:GetAttribute("SoundSystemPlaying") == true,
-        SongId = workspace:GetAttribute("SoundSystemSongId"),
-        Volume = workspace:GetAttribute("SoundSystemVolume") or 1,
-    }
+-- ==========================================
+-- UI TAB: SOUND SYSTEM
+-- ==========================================
+local SoundTab = API.CreateTab("Sound System")
+
+StatusSoundCard = API.Paragraph(
+    SoundTab,
+    "Sound System: Memuat status...",
+    "Menghubungkan ke SoundSystemRequest & SoundSystemConfig..."
+)
+
+API.Section(SoundTab, "Daftar Lagu Bawaan (" .. tostring(#DaftarLagu) .. " Lagu)")
+
+-- Susun daftar judul untuk Dropdown jika tersedia di CustomUI
+local judulOptions = {}
+for i, song in ipairs(DaftarLagu) do
+    table.insert(judulOptions, tostring(i) .. ". " .. song.Title)
 end
 
-return SoundOps
+if API.Dropdown then
+    API.Dropdown(SoundTab, "Pilih Lagu Bawaan", judulOptions, judulOptions[1], function(val)
+        local idx = tonumber(tostring(val):match("^(%d+)%."))
+        if idx and DaftarLagu[idx] then
+            selectedSongIndex = idx
+            perbaruiStatusUI()
+        end
+    end)
+end
+
+API.Button(SoundTab, "Putar Lagu Pilihan", function()
+    putarLaguPreset(selectedSongIndex)
+end)
+
+API.Button(SoundTab, "Lagu Berikutnya (Next) >>", function()
+    if #DaftarLagu == 0 then return end
+    selectedSongIndex = (selectedSongIndex % #DaftarLagu) + 1
+    putarLaguPreset(selectedSongIndex)
+end)
+
+API.Button(SoundTab, "<< Lagu Sebelumnya (Prev)", function()
+    if #DaftarLagu == 0 then return end
+    selectedSongIndex = ((selectedSongIndex - 2) % #DaftarLagu) + 1
+    putarLaguPreset(selectedSongIndex)
+end)
+
+API.Button(SoundTab, "Putar Lagu Acak (Shuffle)", function()
+    if #DaftarLagu == 0 then return end
+    selectedSongIndex = math.random(1, #DaftarLagu)
+    putarLaguPreset(selectedSongIndex)
+end)
+
+API.Section(SoundTab, "Custom Asset ID & Kontrol")
+
+if API.Input or API.TextBox then
+    local inputFn = API.Input or API.TextBox
+    inputFn(SoundTab, "Masukkan ID Lagu (Angka)", "Contoh: 112447571198662", function(text)
+        customIdInput = text
+    end)
+end
+
+API.Button(SoundTab, "Cek & Putar Custom ID", function()
+    putarCustomId(customIdInput)
+end)
+
+API.Button(SoundTab, "Matikan Lagu (Stop)", function()
+    matikanLagu()
+end)
+
+API.Button(SoundTab, "Buka UI SoundChoice Bawaan Game", function()
+    if _G.OpenSoundChoice then
+        _G.OpenSoundChoice()
+    else
+        safeInvoke("Open", nil)
+        API.Notify("Info", "Remote Open dipanggil.", 2)
+    end
+end)
+
+API.Section(SoundTab, "Pengaturan Volume")
+
+if API.Slider then
+    API.Slider(SoundTab, "Volume Sound System (%)", 0, 100, 100, function(val)
+        aturVolume(val)
+    end)
+else
+    API.Button(SoundTab, "Volume 100% (Maksimal)", function() aturVolume(100) end)
+    API.Button(SoundTab, "Volume 50% (Sedang)", function() aturVolume(50) end)
+    API.Button(SoundTab, "Volume 20% (Pelan)", function() aturVolume(20) end)
+    API.Button(SoundTab, "Volume 0% (Mute)", function() aturVolume(0) end)
+end
+
+-- Listener sinkronisasi real-time jika ada pemain lain mengganti lagu/volume
+Workspace:GetAttributeChangedSignal("SoundSystemPlaying"):Connect(perbaruiStatusUI)
+Workspace:GetAttributeChangedSignal("SoundSystemSongId"):Connect(perbaruiStatusUI)
+Workspace:GetAttributeChangedSignal("SoundSystemVolume"):Connect(perbaruiStatusUI)
+
+perbaruiStatusUI()
