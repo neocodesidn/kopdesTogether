@@ -120,7 +120,6 @@ end
 -- TAHAP 1: AKTIVASI SPEAKER DI DEKAT BARANG
 -- ==========================================
 local function aktivasiSpeaker(autoBalik)
-    -- Cek apakah sesi sudah aktif tanpa perlu pindah posisi
     local cekLangsung = invokeDirect("Open", nil)
     if cekLangsung and cekLangsung.ok then
         sesiAktif = true
@@ -143,7 +142,6 @@ local function aktivasiSpeaker(autoBalik)
 
     local posisiAwal = hrp.CFrame
 
-    -- Dekatkan karakter tepat di depan speaker agar validasi jarak server lolos
     hrp.CFrame = targetPart.CFrame * CFrame.new(0, 2, 2.5)
     task.wait(0.35)
 
@@ -183,7 +181,6 @@ local function putarLaguPreset(index)
 
     isBusy = true
 
-    -- Pastikan Tahap 1 sudah aktif sebelum Tahap 2 dijalankan
     if not sesiAktif then
         local okAktif, errAktif = aktivasiSpeaker(true)
         if not okAktif then
@@ -195,7 +192,6 @@ local function putarLaguPreset(index)
 
     local res = invokeDirect("PlayListed", song.ID)
 
-    -- Jika sesi sempat reset oleh server, ulangi Tahap 1 sekali lagi
     if not (res and res.ok) then
         sesiAktif = false
         local okRetry, errRetry = aktivasiSpeaker(true)
@@ -302,17 +298,54 @@ API.Button(SoundTab, "Putar Lagu Pilihan", function()
     putarLaguPreset(selectedSongIndex)
 end)
 
-API.Button(SoundTab, "Lagu Berikutnya (Next) >>", function()
+-- ==========================================
+-- BARIS DUA TOMBOL KANAN-KIRI: << PREV | NEXT >>
+-- ==========================================
+local elemenSebelum = {}
+for _, child in ipairs(SoundTab:GetChildren()) do
+    elemenSebelum[child] = true
+end
+
+API.Button(SoundTab, "<< Prev", function()
+    if #DaftarLagu == 0 then return end
+    selectedSongIndex = ((selectedSongIndex - 2) % #DaftarLagu) + 1
+    putarLaguPreset(selectedSongIndex)
+end)
+
+API.Button(SoundTab, "Next >>", function()
     if #DaftarLagu == 0 then return end
     selectedSongIndex = (selectedSongIndex % #DaftarLagu) + 1
     putarLaguPreset(selectedSongIndex)
 end)
 
-API.Button(SoundTab, "<< Lagu Sebelumnya (Prev)", function()
-    if #DaftarLagu == 0 then return end
-    selectedSongIndex = ((selectedSongIndex - 2) % #DaftarLagu) + 1
-    putarLaguPreset(selectedSongIndex)
+local tombolBaru = {}
+for _, child in ipairs(SoundTab:GetChildren()) do
+    if not elemenSebelum[child] and child:IsA("GuiObject") then
+        table.insert(tombolBaru, child)
+    end
+end
+table.sort(tombolBaru, function(a, b)
+    return a.LayoutOrder < b.LayoutOrder
 end)
+
+if #tombolBaru == 2 then
+    local kiriHolder, kananHolder = tombolBaru[1], tombolBaru[2]
+    local rowFrame = Instance.new("Frame")
+    rowFrame.Name = "PrevNextRow"
+    rowFrame.BackgroundTransparency = 1
+    rowFrame.BorderSizePixel = 0
+    rowFrame.Size = UDim2.new(1, 0, 0, kiriHolder.Size.Y.Offset)
+    rowFrame.LayoutOrder = kiriHolder.LayoutOrder
+    rowFrame.Parent = SoundTab
+
+    kiriHolder.Parent = rowFrame
+    kiriHolder.Position = UDim2.new(0, 0, 0, 0)
+    kiriHolder.Size = UDim2.new(0.5, -5, 1, 0)
+
+    kananHolder.Parent = rowFrame
+    kananHolder.Position = UDim2.new(0.5, 5, 0, 0)
+    kananHolder.Size = UDim2.new(0.5, -5, 1, 0)
+end
 
 API.Button(SoundTab, "Putar Lagu Acak (Shuffle)", function()
     if #DaftarLagu == 0 then return end
@@ -327,7 +360,7 @@ API.Button(SoundTab, "Matikan Lagu (Stop)", function()
 end)
 
 if API.Slider then
-    API.Slider(SoundTab, "Volume Sound System (%)", 0, 100, 100, function(val)
+    API.Slider(SoundTab, "Volume Sound System", 0, 100, 5, "%", 100, function(val)
         aturVolume(val)
     end)
 else
@@ -337,7 +370,6 @@ else
     API.Button(SoundTab, "Volume 0% (Mute)", function() aturVolume(0) end)
 end
 
--- Reset status sesi jika karakter respawn
 LocalPlayer.CharacterAdded:Connect(function()
     sesiAktif = false
     perbaruiStatusUI()
