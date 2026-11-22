@@ -29,7 +29,7 @@ local DaftarPlugin = {
     { id = "boost_fps",     name = "Boost FPS & Hide NPC",          file = "boost_fps.lua" },
     { id = "webhook",       name = "Discord Webhook V2",            file = "discord_log.lua" },
     --{ id = "shop_ops",      name = "Auto Kasir & Anti-Pencuri",     file = "shop_ops.lua" },
-    --{ id = "sound_system",  name = "Sound System (Remote Speaker)", file = "sound_system.lua" },
+    { id = "sound_system",  name = "Sound System", file = "sound_ops.lua" },
 }
 
 -- ==========================================
