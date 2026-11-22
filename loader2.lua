@@ -26,10 +26,10 @@ local DaftarPlugin = {
     { id = "smart_payroll", name = "Smart Payroll (Profit Share)",  file = "smart_payroll.lua" },
     { id = "sewa_pekerja",  name = "Sewa Pekerja (NPC Staff)",      file = "sewa_pekerja.lua" },
     { id = "quest",         name = "Auto Claim Quest",              file = "auto_quest.lua" },
+    { id = "sound_system", name = "Sound System (Remote Speaker)", file = "sound_ops.lua" },
     { id = "boost_fps",     name = "Boost FPS & Hide NPC",          file = "boost_fps.lua" },
     { id = "webhook",       name = "Discord Webhook V2",            file = "discord_log.lua" },
     --{ id = "shop_ops",      name = "Auto Kasir & Anti-Pencuri",     file = "shop_ops.lua" },
-    { id = "sound_system",  name = "Sound System", file = "sound_ops.lua" },
 }
 
 -- ==========================================
