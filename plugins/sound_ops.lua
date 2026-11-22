@@ -3,6 +3,7 @@ local API = ...
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LocalPlayer = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -16,7 +17,7 @@ local selectedSongIndex = 1
 local StatusSoundCard
 
 -- ==========================================
--- HELPER CARI & TRIGGER SPEAKER DI PLOT
+-- HELPER CARI & TRIGGER SPEAKER DI PLOT (UNIVERSAL)
 -- ==========================================
 local function cariSpeakerPlot()
     local plots = Workspace:FindFirstChild("Plots")
@@ -73,26 +74,67 @@ local function triggerSpeakerFisik(sembunyikanUIBawaan)
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local posisiAwal = hrp and hrp.CFrame
 
+    -- Dekatkan karakter ke speaker sementara agar lolos validasi jarak server
     local butuhGeser = false
     if hrp and targetPart then
         local maxDist = (prompt and prompt.MaxActivationDistance) or (clickDet and clickDet.MaxActivationDistance) or 12
-        if (hrp.Position - targetPart.Position).Magnitude > (maxDist - 1) then
+        if (hrp.Position - targetPart.Position).Magnitude > (maxDist - 2) then
             butuhGeser = true
-            hrp.CFrame = targetPart.CFrame * CFrame.new(0, 2, 3)
-            task.wait(0.12)
+            hrp.CFrame = targetPart.CFrame * CFrame.new(0, 2, 2.5)
+            task.wait(0.15)
         end
     end
 
     local triggered = false
-    if prompt and fireproximityprompt then
-        pcall(fireproximityprompt, prompt)
-        triggered = true
-    elseif clickDet and fireclickdetector then
-        pcall(fireclickdetector, clickDet)
+
+    -- Metode 1: ProximityPrompt bawaan Roblox (tanpa perlu exploit function)
+    if prompt then
+        pcall(function()
+            prompt:InputHoldBegin()
+            task.wait((prompt.HoldDuration or 0) + 0.08)
+            prompt:InputHoldEnd()
+        end)
         triggered = true
     end
 
-    task.wait(0.2)
+    -- Metode 2: ClickDetector via getconnections / simulasi tap di posisi speaker
+    if not triggered and clickDet then
+        if getconnections then
+            for _, conn in ipairs(getconnections(clickDet.MouseClick)) do
+                pcall(function() conn:Fire(LocalPlayer) end)
+                triggered = true
+            end
+        end
+
+        if not triggered and targetPart and Workspace.CurrentCamera then
+            local screenPos, onScreen = Workspace.CurrentCamera:WorldToViewportPoint(targetPart.Position)
+            if onScreen then
+                pcall(function()
+                    VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 1)
+                    task.wait(0.05)
+                    VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 1)
+                end)
+                triggered = true
+            end
+        end
+    end
+
+    -- Metode 3: Jika speaker memakai SurfaceGui / BillboardGui tombol
+    if not triggered then
+        local guiBtn = speaker:FindFirstChildWhichIsA("GuiButton", true)
+        if guiBtn and getconnections then
+            for _, conn in ipairs(getconnections(guiBtn.Activated)) do
+                pcall(function() conn:Fire() end)
+                triggered = true
+            end
+            for _, conn in ipairs(getconnections(guiBtn.MouseButton1Click)) do
+                pcall(function() conn:Fire() end)
+                triggered = true
+            end
+        end
+    end
+
+    task.wait(0.25)
 
     if butuhGeser and hrp and posisiAwal then
         hrp.CFrame = posisiAwal
@@ -109,7 +151,7 @@ local function triggerSpeakerFisik(sembunyikanUIBawaan)
         end)
     end
 
-    return triggered, triggered and "OK" or "Executor tidak mendukung fireproximityprompt/fireclickdetector"
+    return triggered, triggered and "OK" or "Komponen interaksi speaker tidak ditemukan (bukan Prompt/ClickDetector)."
 end
 
 -- ==========================================
