@@ -117,7 +117,7 @@ local function perbaruiStatusUI()
 end
 
 -- ==========================================
--- TAHAP 1: AKTIVASI SPEAKER DI DEKAT BARANG
+-- TAHAP 1: AKTIVASI SPEAKER (POSISI TEGAK & ANTI-NYANGKUT)
 -- ==========================================
 local function aktivasiSpeaker(autoBalik)
     local cekLangsung = invokeDirect("Open", nil)
@@ -135,19 +135,45 @@ local function aktivasiSpeaker(autoBalik)
     local targetPart = speaker:IsA("BasePart") and speaker or speaker:FindFirstChildWhichIsA("BasePart", true)
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
 
     if not (hrp and targetPart) then
         return false, "Karakter atau objek speaker tidak ditemukan."
     end
 
     local posisiAwal = hrp.CFrame
+    local speakerPos = targetPart.Position
 
-    hrp.CFrame = targetPart.CFrame * CFrame.new(0, 2, 2.5)
+    -- Hitung arah datar (XZ) dari speaker ke arah pemain agar berdiri di lantai terbuka (tidak tembus tembok)
+    local arahKeluar = Vector3.new(hrp.Position.X - speakerPos.X, 0, hrp.Position.Z - speakerPos.Z)
+    if arahKeluar.Magnitude < 0.1 then
+        arahKeluar = Vector3.new(0, 0, 1)
+    else
+        arahKeluar = arahKeluar.Unit
+    end
+
+    local safeY = math.max(hrp.Position.Y, speakerPos.Y + 1.5)
+    local safePos = Vector3.new(speakerPos.X, safeY, speakerPos.Z) + (arahKeluar * 3)
+    local lookTarget = Vector3.new(speakerPos.X, safeY, speakerPos.Z)
+
+    -- Reset momentum & paksa karakter berdiri tegak menghadap speaker
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.AssemblyAngularVelocity = Vector3.zero
+    hrp.CFrame = CFrame.lookAt(safePos, lookTarget)
+
+    if hum then
+        hum.PlatformStand = false
+        hum.Sit = false
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+    end
+
     task.wait(0.35)
 
     local res = invokeDirect("Open", nil)
 
     if autoBalik and hrp and hrp.Parent then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
         hrp.CFrame = posisiAwal
     end
 
@@ -355,7 +381,7 @@ end)
 
 API.Section(SoundTab, "Kontrol & Volume")
 
-API.Button(SoundTab, "Matikan Lagu (Stop)", function()
+API.Button(SoundTab, "Matikan Lagu", function()
     matikanLagu()
 end)
 
