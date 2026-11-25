@@ -79,6 +79,29 @@ local function humanizeText(value)
     return text:gsub("^%s+", ""):gsub("%s+$", "")
 end
 
+-- Versi multi-baris: rapikan tiap baris TANPA menggabungkan baris.
+-- Dipakai untuk konten Paragraph agar "Cara Pemakaian" tetap per baris & tidak jadi satu blok padat.
+local function humanizeMultiline(value)
+    local text = tostring(value or "")
+    text = text:gsub("\r\n", "\n"):gsub("\r", "\n")
+    local lines = {}
+    local lastBlank = true -- anggap blank di awal agar baris kosong pertama bukan separator
+    for line in (text .. "\n"):gmatch("(.-)\n") do
+        local cleaned = humanizeText(line)
+        if cleaned ~= "" then
+            table.insert(lines, cleaned)
+            lastBlank = false
+        elseif not lastBlank then
+            table.insert(lines, "")
+            lastBlank = true
+        end
+    end
+    while lines[#lines] == "" do
+        table.remove(lines)
+    end
+    return table.concat(lines, "\n")
+end
+
 local function resolveTabIcon(tabName, customIconId)
     if typeof(customIconId) == "number" and customIconId > 0 and customIconId ~= 4483362458 then
         return "rbxassetid://" .. tostring(customIconId)
@@ -725,7 +748,7 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
             cLbl.Position = UDim2.new(0, 30, 0, 18)
             cLbl.AutomaticSize = Enum.AutomaticSize.Y
             cLbl.BackgroundTransparency = 1
-            cLbl.Text = humanizeText(content)
+            cLbl.Text = humanizeMultiline(content)
             cLbl.TextColor3 = Theme.TextMuted
             cLbl.Font = Fonts.Medium
             cLbl.TextSize = 11
@@ -846,9 +869,18 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         local row = Instance.new("Frame")
         row.Name = "Section"
         row.Size = UDim2.new(1, 0, 0, 24)
+        -- Tumbuh kalau judul membungkus ke 2 baris; spacer transparan menjaga minimal 24px.
+        row.AutomaticSize = Enum.AutomaticSize.Y
         row.BackgroundTransparency = 1
         row.LayoutOrder = nextLayoutOrder(tab)
         row.Parent = tab
+
+        local minSpacer = Instance.new("Frame")
+        minSpacer.Name = "MinHeight"
+        minSpacer.Size = UDim2.new(0, 0, 0, 24)
+        minSpacer.BackgroundTransparency = 1
+        minSpacer.BorderSizePixel = 0
+        minSpacer.Parent = row
 
         local block = Instance.new("Frame")
         block.Size = UDim2.new(0, 6, 0, 16)
@@ -860,7 +892,8 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         addStroke(block, BORDER_WIDTH, Theme.Ink)
 
         local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, -14, 1, 0)
+        lbl.Size = UDim2.new(1, -14, 0, 0)
+        lbl.AutomaticSize = Enum.AutomaticSize.Y
         lbl.Position = UDim2.new(0, 14, 0, 0)
         lbl.BackgroundTransparency = 1
         lbl.Text = formatSectionTitle(title)
@@ -868,7 +901,10 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         lbl.Font = Fonts.Black
         lbl.TextSize = 10
         lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.TextTruncate = Enum.TextTruncate.AtEnd
+        lbl.TextYAlignment = Enum.TextYAlignment.Top
+        -- Bungkus teks, jangan dipotong: judul section memuat hint pakai
+        -- (mis. "Setor Saldo ke Toko (Konfirmasi 2x Klik)").
+        lbl.TextWrapped = true
         lbl.Parent = row
         return lbl
     end
@@ -890,37 +926,60 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         addCorner(marker, 1)
         addStroke(marker, BORDER_WIDTH, Theme.Ink)
 
+        -- Kolom teks: judul & isi ditata vertikal lewat UIListLayout.
+        -- Keduanya AutomaticSize.Y + TextWrapped, jadi panjang berapa pun tidak akan terpotong.
+        local textCol = Instance.new("Frame")
+        textCol.Name = "TextColumn"
+        textCol.Size = UDim2.new(1, -18, 0, 0)
+        textCol.Position = UDim2.new(0, 18, 0, 0)
+        textCol.AutomaticSize = Enum.AutomaticSize.Y
+        textCol.BackgroundTransparency = 1
+        textCol.BorderSizePixel = 0
+        textCol.Parent = card
+
+        local textFlow = Instance.new("UIListLayout")
+        textFlow.Name = "TextFlow"
+        textFlow.FillDirection = Enum.FillDirection.Vertical
+        textFlow.SortOrder = Enum.SortOrder.LayoutOrder
+        textFlow.Padding = UDim.new(0, 4)
+        textFlow.Parent = textCol
+
         local tLbl = Instance.new("TextLabel")
-        tLbl.Size = UDim2.new(1, -18, 0, 16)
-        tLbl.Position = UDim2.new(0, 18, 0, 0)
+        tLbl.Name = "Title"
+        tLbl.Size = UDim2.new(1, 0, 0, 0)
+        tLbl.AutomaticSize = Enum.AutomaticSize.Y
+        tLbl.LayoutOrder = 1
         tLbl.BackgroundTransparency = 1
         tLbl.Text = humanizeText(title)
         tLbl.TextColor3 = Theme.Ink
         tLbl.Font = Fonts.Black
         tLbl.TextSize = 12
+        tLbl.TextWrapped = true
         tLbl.TextXAlignment = Enum.TextXAlignment.Left
-        tLbl.TextTruncate = Enum.TextTruncate.AtEnd
-        tLbl.Parent = card
+        tLbl.TextYAlignment = Enum.TextYAlignment.Top
+        tLbl.Parent = textCol
 
         local cLbl = Instance.new("TextLabel")
+        cLbl.Name = "Content"
         cLbl.Size = UDim2.new(1, 0, 0, 0)
-        cLbl.Position = UDim2.new(0, 0, 0, 20)
         cLbl.AutomaticSize = Enum.AutomaticSize.Y
+        cLbl.LayoutOrder = 2
         cLbl.BackgroundTransparency = 1
-        cLbl.Text = humanizeText(content)
+        cLbl.Text = humanizeMultiline(content)
         cLbl.TextColor3 = Theme.TextMuted
         cLbl.Font = Fonts.Medium
         cLbl.TextSize = 11
         cLbl.TextWrapped = true
         cLbl.TextXAlignment = Enum.TextXAlignment.Left
-        cLbl.Parent = card
+        cLbl.TextYAlignment = Enum.TextYAlignment.Top
+        cLbl.Parent = textCol
 
         return {
             _type = "Paragraph",
             Set = function(_, data)
                 if typeof(data) == "table" then
                     if data.Title or data.title then tLbl.Text = humanizeText(tostring(data.Title or data.title)) end
-                    if data.Content or data.content then cLbl.Text = humanizeText(tostring(data.Content or data.content)) end
+                    if data.Content or data.content then cLbl.Text = humanizeMultiline(tostring(data.Content or data.content)) end
                 end
             end,
         }
@@ -938,7 +997,10 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         btn.Font = Fonts.Black
         btn.TextSize = 12
         btn.TextXAlignment = Enum.TextXAlignment.Center
-        btn.TextTruncate = Enum.TextTruncate.AtEnd
+        btn.TextYAlignment = Enum.TextYAlignment.Center
+        -- Label tombol memuat langkah pakai (mis. "1. Teleport ke Speaker & Aktivasi (Stay)").
+        -- Tinggi 42px muat 2 baris, jadi bungkus alih-alih potong dengan "…".
+        btn.TextWrapped = true
         btn.AutoButtonColor = false
         addPadding(btn, 0, 12, 0, 12)
 
@@ -991,7 +1053,10 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         lbl.Font = Fonts.Bold
         lbl.TextSize = 11
         lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.TextTruncate = Enum.TextTruncate.AtEnd
+        lbl.TextYAlignment = Enum.TextYAlignment.Center
+        -- Nama toggle memuat instruksi (mis. "Perpanjang Semua Role (Kalau Tidak Aktif,
+        -- Pakai Role Terpilih)"). Tinggi baris 46px muat 2 baris, jadi bungkus.
+        lbl.TextWrapped = true
         lbl.ZIndex = 4
         lbl.Parent = row
 
@@ -1048,7 +1113,8 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         holder.LayoutOrder = nextLayoutOrder(tab)
 
         local titleLbl = Instance.new("TextLabel")
-        titleLbl.Size = UDim2.new(1, -136, 0, 16)
+        titleLbl.Size = UDim2.new(1, -136, 0, 0)
+        titleLbl.AutomaticSize = Enum.AutomaticSize.Y
         titleLbl.Position = UDim2.new(0, 12, 0, 9)
         titleLbl.BackgroundTransparency = 1
         titleLbl.Text = tostring(name)
@@ -1056,7 +1122,9 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         titleLbl.Font = Fonts.Bold
         titleLbl.TextSize = 11
         titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-        titleLbl.TextTruncate = Enum.TextTruncate.AtEnd
+        titleLbl.TextYAlignment = Enum.TextYAlignment.Top
+        -- Judul slider boleh 2 baris (ruang y=9..42 masih tersedia sebelum track).
+        titleLbl.TextWrapped = true
         titleLbl.Parent = card
 
         local valBadge = Instance.new("Frame")
@@ -1184,7 +1252,9 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         headerLbl.Font = Fonts.Bold
         headerLbl.TextSize = 11
         headerLbl.TextXAlignment = Enum.TextXAlignment.Left
-        headerLbl.TextTruncate = Enum.TextTruncate.AtEnd
+        headerLbl.TextYAlignment = Enum.TextYAlignment.Center
+        -- "Nama: Pilihan" sering panjang, header 44px muat 2 baris.
+        headerLbl.TextWrapped = true
         headerLbl.ZIndex = 4
         headerLbl.Parent = header
 
@@ -1303,11 +1373,12 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
     -- INPUT NEO-BRUTALISM
     -- ==========================================
     function KopdesAPI.Input(tab, name, placeholder, callback)
-        local holder, card = newShadowed(tab, "Frame", 78, Theme.Paper, false, 1)
+        local holder, card, _, syncSize = newShadowed(tab, "Frame", 78, Theme.Paper, false, 1)
         holder.LayoutOrder = nextLayoutOrder(tab)
 
         local lbl = Instance.new("TextLabel")
-        lbl.Size = UDim2.new(1, -24, 0, 14)
+        lbl.Size = UDim2.new(1, -24, 0, 0)
+        lbl.AutomaticSize = Enum.AutomaticSize.Y
         lbl.Position = UDim2.new(0, 12, 0, 9)
         lbl.BackgroundTransparency = 1
         lbl.Text = tostring(name)
@@ -1315,7 +1386,10 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         lbl.Font = Fonts.Bold
         lbl.TextSize = 11
         lbl.TextXAlignment = Enum.TextXAlignment.Left
-        lbl.TextTruncate = Enum.TextTruncate.AtEnd
+        lbl.TextYAlignment = Enum.TextYAlignment.Top
+        -- Label memuat instruksi (mis. "Custom Angka Hari Bebas (Tekan Enter)").
+        -- Bungkus, lalu dorot textbox ke bawah mengikuti tinggi label.
+        lbl.TextWrapped = true
         lbl.Parent = card
 
         local box = Instance.new("TextBox")
@@ -1335,6 +1409,16 @@ function CustomUI.AttachToAPI(KopdesAPI, config)
         addCorner(box, Theme.Radius)
         local boxStroke = addStroke(box, BORDER_WIDTH, Theme.Ink)
         addPadding(box, 0, 10, 0, 10)
+
+        -- Tata ulang: textbox selalu di bawah label, kartu ikut memanjang.
+        local function relayout()
+            local labelH = math.max(lbl.AbsoluteSize.Y, 14)
+            local boxY = 9 + labelH + 8
+            box.Position = UDim2.new(0, 12, 0, boxY)
+            syncSize(boxY + 32 + 15)
+        end
+        lbl:GetPropertyChangedSignal("AbsoluteSize"):Connect(relayout)
+        task.defer(relayout)
 
         box.Focused:Connect(function()
             tween(box, { BackgroundColor3 = Theme.AccentSoft }, 0.12)
